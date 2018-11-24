@@ -1,8 +1,9 @@
 S entry '\n' | S entry '\n'
 entry line | afunc
-line exp | stat
+line exp | stat | print
 stat name ws '=' ws exp
-exp binop | number | name
+exp binop | number | var
+var name
 binop binopa | binopb
 binopa times | divide
 binopb plus | minus
@@ -15,3 +16,4 @@ number '[[:digit:]]+'
 ws ' *'
 afunc 'func' ws name '\(' args '\)'
 args name | name ',' ws args
+print 'print' '\(' exp '\)'
