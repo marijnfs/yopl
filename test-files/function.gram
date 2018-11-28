@@ -1,9 +1,10 @@
 S entry '\n' | S entry '\n'
 entry line | afunc
-line exp | stat | print
-stat name ws '=' ws exp
+line exp | stat | print | return
+stat svar ws '=' ws exp
 exp binop | number | var
 var name
+svar name
 binop binopa | binopb
 binopa times | divide
 binopb plus | minus
@@ -17,3 +18,4 @@ ws ' *'
 afunc 'func' ws name '\(' args '\)'
 args name | name ',' ws args
 print 'print' '\(' exp '\)'
+return 'return' ws exp

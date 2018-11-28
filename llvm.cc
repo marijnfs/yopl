@@ -20,6 +20,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 
 #include <iostream>
 
@@ -56,58 +57,49 @@ Function *makeFunc(LLVMContext &C, Module *mod) {
   Value *result = BinaryOperator::CreateAdd(tmp, z, "result", block);
   ReturnInst::Create(C, result, block);
 
+
   // return mod;
   return mul_add;
 }
 
-Function *make_func_yopl(LLVMContext &C, Module *mod) {
-  ifstream gram_in("test-files/function.gram");
-  ifstream input_in("test-files/function.input");
-  Parser parser(gram_in);
-  auto parse_graph = parser.parse(input_in);
-
-  typedef vector<Value*> value_vector;
-
-  cout << "n nodes:" << parse_graph->size() << endl;
-  value_vector val_vec(parse_graph->size());
-  vector<double> test_vec(parse_graph->size());
-
+void interpret(ParseGraph &pg) {
+  cout << "n nodes:" << pg.size() << endl;
+  vector<double> double_vec(pg.size());
   map<string, double> vars;
-  auto callback = [&val_vec, &test_vec, &vars, &C](ParseGraph &pg, int n) {
+
+  auto callback = [&double_vec, &vars](ParseGraph &pg, int n) {
     auto rulename = pg.name(n);
     //cout << rulename << endl;
     if (rulename == "number") {
       double val(0);
       istringstream iss(pg.substr(n));
       iss >> val;
-      val_vec[n] = ConstantInt::get(Type::getInt64Ty(C), val);
-      test_vec[n] = val;
+      double_vec[n] = val;
     } 
     else if (rulename == "times") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = BinaryOperator::CreateMul(val_vec[c1], val_vec[c2]);
-      test_vec[n] = test_vec[c1] * test_vec[c2];
+      double_vec[n] = double_vec[c1] * double_vec[c2];
     } 
     else if (rulename == "divide") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      test_vec[n] = test_vec[c1] / test_vec[c2];
+      double_vec[n] = double_vec[c1] / double_vec[c2];
     } 
     else if (rulename == "plus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      test_vec[n] = test_vec[c1] + test_vec[c2];
+      double_vec[n] = double_vec[c1] + double_vec[c2];
     } 
     else if (rulename == "minus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      test_vec[n] = test_vec[c1] - test_vec[c2];
+      double_vec[n] = double_vec[c1] - double_vec[c2];
     } 
     else if (rulename == "stat") {
       int namen = pg.get_one(n, "name");
       auto var_name = pg.substr(namen);
-      auto var_val = test_vec[pg.children(n)[1]];
+      auto var_val = double_vec[pg.children(n)[1]];
       //cout << "stat: " << var_name << " " << var_val << endl;
       vars[var_name] = var_val;
     } 
@@ -117,18 +109,123 @@ Function *make_func_yopl(LLVMContext &C, Module *mod) {
       if (!vars.count(var_name)) {
         cerr << "variable " << var_name << "doesnt exist" << endl;
       }
-      test_vec[n] = vars[var_name];
+      double_vec[n] = vars[var_name];
     } 
     else if (rulename == "print") {
-      cout << "p: " << test_vec[pg.children(n)[0]] << endl;
+      cout << "p: " << double_vec[pg.children(n)[0]] << endl;
+    } 
+    else if (pg.children(n).size()) {
+      double_vec[n] = double_vec[pg.children(n)[0]];
+    }
+  };
+  pg.visit_bottom_up(0, callback);  
+
+
+}
+
+Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
+  std::vector<Type *> inputs;
+  // Function *mul_add = mod->getFunction("mul_add");
+
+  FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), inputs, false);
+  Function *bla =
+      Function::Create(FT, Function::ExternalLinkage, "bla", mod);
+  // Function *mul_add = cast<Function>(mod->getOrInsertFunction("muladd", FT));
+  bla->setCallingConv(CallingConv::C);
+
+  auto args = bla->arg_begin();
+
+  BasicBlock *block = BasicBlock::Create(C, "entry", bla);
+  //Instruction* tail = block->getTerminator();
+
+  //  pb->getInstList().push_back(newInst); // Appends newInst to pb
+
+  typedef vector<Value*> value_vector;
+
+  cout << "n nodes:" << pg.size() << endl;
+  value_vector val_vec(pg.size());
+  map<string, Value*> var_ptrs;
+
+  for (auto var : pg.get_all(0, "svar")) {
+    auto name = pg.substr(var);
+    if (!var_ptrs.count(name)) {
+      auto alloc = new AllocaInst(Type::getDoubleTy(C), 0, name, block);
+      var_ptrs[name] = alloc;
+      //block->getInstList().push_back(alloc);
+      cout << name << " " << alloc << endl;
+    }
+  }
+
+  int ret_n(-1);
+
+  auto callback = [&val_vec, &var_ptrs, &C, &ret_n, &block](ParseGraph &pg, int n) {
+    auto rulename = pg.name(n);
+    //cout << rulename << endl;
+    if (rulename == "number") {
+      double val(0);
+      istringstream iss(pg.substr(n));
+      iss >> val;
+      val_vec[n] = ConstantFP::get(C, APFloat(val));
+    } 
+    else if (rulename == "times") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      val_vec[n] = BinaryOperator::CreateFMul(val_vec[c1], val_vec[c2], "", block);
+    } 
+    else if (rulename == "divide") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      val_vec[n] = BinaryOperator::CreateFDiv(val_vec[c1], val_vec[c2], "", block);
+    } 
+    else if (rulename == "plus") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      val_vec[n] = BinaryOperator::CreateFAdd(val_vec[c1], val_vec[c2], "", block);
+    }
+    else if (rulename == "minus") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      val_vec[n] = BinaryOperator::CreateFSub(val_vec[c1], val_vec[c2], "", block);
+
+    } 
+    else if (rulename == "stat") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      auto var_name = pg.substr(c1);
+      cout << "stat: " << var_name << " " << var_ptrs[var_name] << " " << c1 << " " << c2 << " " << val_vec[c2] << endl;
+      val_vec[n] = new StoreInst(val_vec[c2], var_ptrs[var_name], block);
+    } 
+    else if (rulename == "var") {
+      int c1 = pg.children(n)[0];
+      auto var_name = pg.substr(c1);
+      if (!var_ptrs.count(var_name)) {
+        cerr << "no variable called " << var_name << endl;
+        return;
+      }
+      val_vec[n] = new LoadInst(var_ptrs[var_name], 0, block);
+    } 
+    else if (rulename == "print") {
+    }
+    else if (rulename == "return") {
+      int c1 = pg.children(n)[0];
+      ret_n = c1;
+      ReturnInst::Create(C, val_vec[c1], block);
     } 
     else if (pg.children(n).size()) {
       val_vec[n] = val_vec[pg.children(n)[0]];
-      test_vec[n] = test_vec[pg.children(n)[0]];
-
     }
   };
-  parse_graph->visit_bottom_up(0, callback);
+
+  for (auto n : pg.get_all(0, "line")) {
+    pg.visit_bottom_up(n, callback);
+  }
+
+
+  for (int n(0); n < (int)val_vec.size(); ++n)
+    cout << n << " " << val_vec[n] << " " << pg.name(n) << endl;
+  if (ret_n < 0)
+    ReturnInst::Create(C, ConstantFP::get(C, APFloat(0.0)), block);
+  return bla;
 //  for (auto t : test_vec)
  //   cout << t << " ";
 }
@@ -142,17 +239,33 @@ int main(int argc, char **argv) {
   LLVMContext C;
   std::unique_ptr<Module> module(new Module("test", C));
 
-  Function *muladd = make_func_yopl(C, module.get());
+  //Create the parser
+  ifstream gram_in("test-files/function.gram");
+  ifstream input_in("test-files/function.input");
+  Parser parser(gram_in);
+  auto parse_graph = parser.parse(input_in);
+  
+  //interpret(*parse_graph.get());
 
-  // muladd = mod->getFunction("muladd");
-  if (verifyFunction(*muladd)) {
+  Function *bla_func = make_func_yopl(C, module.get(), *parse_graph.get());
+
+  //WriteBitcodeToFile(module.get(), outs());
+  // bla_func = mod->getFunction("bla_func");
+  std::string errStr;
+  if (verifyFunction(*bla_func, &outs())) {
     cout << "failed verification" << endl;
     return 1;
   }
 
-  std::string errStr;
+  errs() << "verifying... " << module.get();
+  // if (verifyModule(*module)) {
+  //   errs() << argv[0] << ": Error constructing function!\n";
+  //   return 1;
+  // }
+
   ExecutionEngine *EE =
       EngineBuilder(std::move(module)).setErrorStr(&errStr).create();
+
 
   if (!EE) {
     errs() << argv[0] << ": Failed to construct ExecutionEngine: " << errStr
@@ -160,11 +273,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  errs() << "verifying... ";
-  if (verifyModule(*module)) {
-    errs() << argv[0] << ": Error constructing function!\n";
-    return 1;
-  }
 
   EE->finalizeObject();
 
@@ -175,11 +283,11 @@ int main(int argc, char **argv) {
   //GenericValue GV = EE->runFunction(muladd, Args);*/
 
   // cout << muladd << endl;
-  typedef uint32_t bla(uint32_t, uint32_t, uint32_t);
+  typedef double bla();
+  cout << "getting bla" << endl;
+  bla *f = (bla *)EE->getFunctionAddress("bla");
 
-  bla *f = (bla *)EE->getFunctionAddress("mul_add");
-
-  outs() << "Result: " << f(1233, 12315, 61313) << "\n";
+  outs() << "Result: " << f() << "\n";
 
   return 0;
 }
