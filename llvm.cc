@@ -130,15 +130,12 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
   FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), inputs, false);
   Function *bla =
       Function::Create(FT, Function::ExternalLinkage, "bla", mod);
-  // Function *mul_add = cast<Function>(mod->getOrInsertFunction("muladd", FT));
+
   bla->setCallingConv(CallingConv::C);
 
   auto args = bla->arg_begin();
 
   BasicBlock *block = BasicBlock::Create(C, "entry", bla);
-  //Instruction* tail = block->getTerminator();
-
-  //  pb->getInstList().push_back(newInst); // Appends newInst to pb
 
   typedef vector<Value*> value_vector;
 
@@ -151,8 +148,6 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
     if (!var_ptrs.count(name)) {
       auto alloc = new AllocaInst(Type::getDoubleTy(C), 0, name, block);
       var_ptrs[name] = alloc;
-      //block->getInstList().push_back(alloc);
-      cout << name << " " << alloc << endl;
     }
   }
 
@@ -192,7 +187,6 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
       auto var_name = pg.substr(c1);
-      cout << "stat: " << var_name << " " << var_ptrs[var_name] << " " << c1 << " " << c2 << " " << val_vec[c2] << endl;
       val_vec[n] = new StoreInst(val_vec[c2], var_ptrs[var_name], block);
     } 
     else if (rulename == "var") {
@@ -221,8 +215,6 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
   }
 
 
-  for (int n(0); n < (int)val_vec.size(); ++n)
-    cout << n << " " << val_vec[n] << " " << pg.name(n) << endl;
   if (ret_n < 0)
     ReturnInst::Create(C, ConstantFP::get(C, APFloat(0.0)), block);
   return bla;

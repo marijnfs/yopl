@@ -2,16 +2,17 @@ S entry '\n' | S entry '\n'
 entry line | afunc
 line exp | stat | print | return
 stat svar ws '=' ws exp
-exp binop | number | var
 var name
 svar name
-binop binopa | binopb
-binopa times | divide
-binopb plus | minus
+binop binopa
+exp binopa | binopb | number | var
+expb binopb | number | var
+binopa plus | minus
+binopb times | divide
 plus exp ws '\+' ws exp
 minus exp ws '-' ws exp
-times exp ws '\*' ws exp
-divide exp ws '\/' ws exp
+times expb ws '\*' ws expb
+divide expb ws '\/' ws expb
 name '[[:alpha:]]+'
 number '[[:digit:]]+'
 ws ' *'
