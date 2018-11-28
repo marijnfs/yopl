@@ -1,6 +1,6 @@
 S entry '\n' | S entry '\n'
-entry line | afunc
-line exp | stat | print | return
+entry ws line comment | func
+line exp | stat | call | print | return
 stat svar ws '=' ws exp
 var name
 svar name
@@ -15,8 +15,15 @@ times expb ws '\*' ws expb
 divide expb ws '\/' ws expb
 name '[[:alpha:]]+'
 number '[[:digit:]]+'
-ws ' *'
-afunc 'func' ws name '\(' args '\)'
+ws '[ \t]*'
+func 'func' ws name '\(' args '\)' '\n' block
 args name | name ',' ws args
 print 'print' '\(' exp '\)'
 return 'return' ws exp
+comment '' | ws '\/\/' '[^\/\n]*'
+cmp less | more | equals
+less exp ws '<' ws exp
+more exp ws '>' ws exp
+equals exp ws '==' ws exp
+block '{\n' S '}'
+call name '\(' args '\)'

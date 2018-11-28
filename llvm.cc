@@ -133,7 +133,7 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
 
   bla->setCallingConv(CallingConv::C);
 
-  auto args = bla->arg_begin();
+  // auto args = bla->arg_begin();
 
   BasicBlock *block = BasicBlock::Create(C, "entry", bla);
 
@@ -153,7 +153,7 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
 
   int ret_n(-1);
 
-  auto callback = [&val_vec, &var_ptrs, &C, &ret_n, &block](ParseGraph &pg, int n) {
+  auto callback = [&val_vec, &var_ptrs, &C, &ret_n, &block, &mod](ParseGraph &pg, int n) {
     auto rulename = pg.name(n);
     //cout << rulename << endl;
     if (rulename == "number") {
@@ -197,7 +197,27 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
         return;
       }
       val_vec[n] = new LoadInst(var_ptrs[var_name], 0, block);
-    } 
+    }
+    else if (rulename == "func") {
+      int cname = pg.children(n)[0];
+      int cargs = pg.children(n)[1];
+      int cfunc = pg.children(n)[2];
+      
+      std::vector<Type *> inputs;
+      for (auto n : pg.get_all(cargs, "arg")) {
+        inputs.push_back(Type::getDoubleTy(C));
+      }
+      FunctionType *func_type = FunctionType::get(Type::getDoubleTy(C), inputs, false);
+      Function *function = Function::Create(func_type, Function::ExternalLinkage, "", mod);
+      auto args = function->arg_begin();
+      for (auto n : pg.get_all(cargs, "arg")) {
+        args->setName(pg.substr(n));
+        args++;
+      }
+      function->setCallingConv(CallingConv::C);
+
+      cout << "func :" << pg.substr(cname) << " arg:" << pg.substr(cargs) << endl;
+    }
     else if (rulename == "print") {
     }
     else if (rulename == "return") {
@@ -210,10 +230,9 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
     }
   };
 
-  for (auto n : pg.get_all(0, "line")) {
+  for (auto n : pg.get_all(0, "entry")) {
     pg.visit_bottom_up(n, callback);
   }
-
 
   if (ret_n < 0)
     ReturnInst::Create(C, ConstantFP::get(C, APFloat(0.0)), block);
@@ -223,7 +242,7 @@ Function *make_func_yopl(LLVMContext &C, Module *mod, ParseGraph &pg) {
 }
 
 int main(int argc, char **argv) {
-  cout << "BEGIN" << endl;
+  cout << "YOPL compiler" << endl;
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
@@ -232,13 +251,16 @@ int main(int argc, char **argv) {
   std::unique_ptr<Module> module(new Module("test", C));
 
   //Create the parser
+  cout << "Contructing parser" << endl;
   ifstream gram_in("test-files/function.gram");
   ifstream input_in("test-files/function.input");
   Parser parser(gram_in);
+
+  cout << "Parsing file" << endl;
   auto parse_graph = parser.parse(input_in);
   
   //interpret(*parse_graph.get());
-
+  cout << "Compiling" << endl;
   Function *bla_func = make_func_yopl(C, module.get(), *parse_graph.get());
 
   //WriteBitcodeToFile(module.get(), outs());
@@ -248,8 +270,6 @@ int main(int argc, char **argv) {
     cout << "failed verification" << endl;
     return 1;
   }
-
-  errs() << "verifying... " << module.get();
   // if (verifyModule(*module)) {
   //   errs() << argv[0] << ": Error constructing function!\n";
   //   return 1;
@@ -276,10 +296,10 @@ int main(int argc, char **argv) {
 
   // cout << muladd << endl;
   typedef double bla();
-  cout << "getting bla" << endl;
   bla *f = (bla *)EE->getFunctionAddress("bla");
+  double result = f();
 
-  outs() << "Result: " << f() << "\n";
+  cout << "Result: " << result << "\n";
 
   return 0;
 }
