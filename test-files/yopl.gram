@@ -1,12 +1,14 @@
 S entries
 entries entryln | entryln entries
-entryln ws entry '\n'
+entryln ws entry optcom '\n'
+optcom comment | nocomment
+nocomment ''
+comment ws '#' comstr:'[^\n]*'
 entry classdef | functiondef | block | line | comment | ''
-block '\[\n' entries '\]\n'
-comment '#' '[^\n]*'
+block '\[\n' entries '\]' optcom '\n'
 classdef '\[' name '\]\n' clentries
 line stat | alloc
-alloc varname '[' value ']'
+alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
 basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
 type basetype ptr | name ptr
@@ -23,8 +25,15 @@ items item | item ',' rws items
 item varname | vardef
 varname name | name '\.' varname
 stat name rws '=' rws value
-value flow | number | arraysize
+value flow | number | arraysize | exp
 number int | float
-int '[:digit:]+'
-float  real:'[:digit:]' '\.' frac:'[:digit:]+'
+int '[[:digit:]]+'
+float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
+exp binop | expb
+binop plus | min | times | divide
+plus exp rws '\+' rws exp
+min exp rws '-' rws exp
+times expb rws '\*' rws expb
+divide expb rws '\/' rws expb
+expb number | varname | '(' exp ')'
