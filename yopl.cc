@@ -1,4 +1,4 @@
-#include "parser.h"
+#include "../yagll/yagll.h"
 
 using namespace std;
 
@@ -9,13 +9,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  string gram_file(argv[1]);
-  string input_file(argv[2]);
+  int bla;
+  string gram_path(argv[1]);
+  string input_path(argv[2]);
+
+  ifstream gram_file(gram_path);
+  ifstream input_file(input_path);
 
   Parser parser(gram_file);
   auto parse_graph = parser.parse(input_file);
-  
-  parser.dot_graph_debug("graphdebug.dot");
   
   if (!parse_graph)
     return 0;
@@ -37,13 +39,13 @@ int main(int argc, char **argv) {
     }*/
 
   cout << "BFS:" << endl;
-  parse_graph->visit_bfs([](ParseGraph &pg, int n){
+  parse_graph->visit_bfs(0, [](ParseGraph &pg, int n){
       //cout << pg.name(n) << " - " << pg.substr(n) << endl;
     });
   cout << endl;
 
   cout << "DFS:" << endl;
-  parse_graph->visit_dfs([](ParseGraph &pg, int n){
+  parse_graph->visit_dfs(0, [](ParseGraph &pg, int n){
       //cout << pg.name(n) << " - " << pg.substr(n) << endl;
     });
   cout << endl;
@@ -51,7 +53,7 @@ int main(int argc, char **argv) {
 
   cout << "LEAF:" << endl;
   vector<int> bla(parse_graph->size());
-  parse_graph->visit_bottom_up([&bla](ParseGraph &pg, int n){
+  parse_graph->visit_bottom_up(0, [&bla](ParseGraph &pg, int n){
       cout << n << " {" << pg.name(n) << " : " << pg.substr(n) << endl;
       bla[n] = 1;
       //for (int c : pg.nodes[n].children) {

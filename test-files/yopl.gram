@@ -1,0 +1,29 @@
+S entries
+entries entryln | entryln entries
+entryln ws entry '\n'
+entry classdef | functiondef | block | line | comment | ''
+block '\[\n' entries '\]\n'
+comment '#' '[^\n]*'
+classdef '\[' name '\]\n' clentries
+line stat
+name '[_[:alpha:]]+'
+basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
+type basetype ptr | name ptr
+ptr '\*' | noptr
+noptr ''
+vardef type rws name
+rws '[ \t]+'
+ws '[ \t]*'
+clentries clentry | clentry clentries
+clentry vardef '\n'
+functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
+flow ''
+items item | item ',' rws items
+item varname | vardef
+varname name | name '\.' varname
+stat name rws '=' rws value
+value flow | number | arraysize
+number int | float
+int '[:digit:]+'
+float  real:'[:digit:]' '\.' frac:'[:digit:]+'
+arraysize varname '\[\]'

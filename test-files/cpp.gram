@@ -1,20 +1,27 @@
 S entry '\n' | S entry '\n'
-entry include | using | ws | function
+entry include | using | ws | function | '\n'
 include '#include ' include_name
-include_name '"' name '"' | '<' name '>'
-name '[.[:alpha:]]+'
+include_name '"' '[^\"]+' '"' | '<' name '>'
+name '[._[:alpha:]]+'
 ws '[ \t]*'
 using 'using namespace ' name ';'
 function type ' ' name '\(' args '\) ' block
-type 'int' | 'float' | 'char'
+type 'int' | 'float' | 'char' | 'string'
 args var | args ', ' var
 var type ' ' ptr name
-block '{' s statements '}'
-statements ws statement ';\n' | statements ws statement ';\n'
+block ws '{' s lines ws '}'
+lines line '\n' lines | line '\n' | '\n'
+line ws statement ';' | ws ifstat
 ptr '' | '\*' | '\*\*'
-statement initvar | exp
-initvar var '(' number ')'
-exp binop
+statement initvar | exp | ifstat | define
+ifstat 'if' ws '\(' cmp '\)' ws block
+cmp exp ws '<' ws exp
+initvar var '\(' number '\)'
+exp binop | name | string | number | struct | return
 number '[[:digit:]]'
-binop name ws '<<' ws name
+binop exp ws '<<' ws exp
 s '\s'
+string '"' '[^\"]+' '"'
+struct name '\[' number '\]' | name '.' name
+return 'return' ws exp
+define type ws name | type ws name '\(' exp '\)'
