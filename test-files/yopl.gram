@@ -4,10 +4,10 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry classdef | functiondef | block | line | comment | ''
+entry classdef | functiondef | block | line | comment | branch | flow | ''
 block '\[\n' entries '\]' optcom '\n'
 classdef '\[' name '\]\n' clentries
-line stat | alloc
+line stat | alloc | vardef
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
 basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
@@ -20,11 +20,10 @@ ws '[ \t]*'
 clentries clentry | clentry clentries
 clentry vardef '\n'
 functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
-flow ''
 items item | item ',' rws items
 item varname | vardef
-varname name | name '\.' varname
-stat name rws '=' rws value
+varname name | name '\.' varname | int | '\(' value '\)'
+stat varname rws '=' rws value
 value flow | number | arraysize | exp
 number int | float
 int '[[:digit:]]+'
@@ -36,4 +35,22 @@ plus exp rws '\+' rws exp
 min exp rws '-' rws exp
 times expb rws '\*' rws expb
 divide expb rws '\/' rws expb
-expb number | varname | '(' exp ')'
+expb number | varname | '\(' exp '\)'
+cmp less | more | eq | noteq
+less value rws '<' rws value
+more value rws '>' rws value
+eq value rws '==' rws value
+noteq value rws '!=' rws value
+branch cmp rws '\?' '\n' branchblocks
+branchblocks branchfinal | branchblock branchblocks
+branchblock entries ws optjmp '\|' '\n'
+branchfinal entries ws optjmp '\]'
+optjmp jmp | nojmp
+jmp '\^'
+nojmp ''
+flow inflow rws '\>' rws outputs
+inflow flow | inputs
+inputs input | input ',' rws inputs
+input name | '\(' value '\)'
+outputs names
+names name | name ',' rws names
