@@ -5,7 +5,8 @@ entry classdef | functiondef | block | line | comment | ''
 block '\[\n' entries '\]\n'
 comment '#' '[^\n]*'
 classdef '\[' name '\]\n' clentries
-line stat
+line stat | alloc
+alloc varname '[' value ']'
 name '[_[:alpha:]]+'
 basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
 type basetype ptr | name ptr
