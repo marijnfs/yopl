@@ -4,10 +4,10 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry classdef | functiondef | block | line | comment | branch | flow | ''
+entry classdef | functiondef | block | line | comment | branch | flow | continue | ''
 block '\[\n' entries '\]' optcom '\n'
 classdef '\[' name '\]\n' clentries
-line stat | alloc | vardef
+line stat | alloc | vardef | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
 basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
@@ -29,7 +29,9 @@ number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp binop | expb
+exp binop | expb | inc | dec
+inc varname '\+\+'
+dec varname '\-\-'
 binop plus | min | times | divide
 plus exp rws '\+' rws exp
 min exp rws '-' rws exp
@@ -51,6 +53,8 @@ nojmp ''
 flow inflow rws '\>' rws outputs
 inflow flow | inputs
 inputs input | input ',' rws inputs
-input name | '\(' value '\)'
+input name | '\(' value '\)' | str
 outputs names
 names name | name ',' rws names
+str '\"' '[^\"]*' '\"'
+continue '>' | continue '>'

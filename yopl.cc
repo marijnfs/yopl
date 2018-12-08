@@ -16,8 +16,10 @@ int main(int argc, char **argv) {
   ifstream gram_file(gram_path);
   ifstream input_file(input_path);
 
-  Parser parser(gram_file);
-  auto parse_graph = parser.parse(input_file);
+  ifstream gram_in(gram_file);
+  Parser parser(gram_in);
+  ifstream input_in(input_file);
+  auto parse_graph = parser.parse(input_in);
   
   if (!parse_graph)
     return 0;
@@ -37,31 +39,6 @@ int main(int argc, char **argv) {
            << " " << parse_graph->starts[n] << endl;
     }
     }*/
-
-  cout << "BFS:" << endl;
-  parse_graph->visit_bfs(0, [](ParseGraph &pg, int n){
-      //cout << pg.name(n) << " - " << pg.substr(n) << endl;
-    });
-  cout << endl;
-
-  cout << "DFS:" << endl;
-  parse_graph->visit_dfs(0, [](ParseGraph &pg, int n){
-      //cout << pg.name(n) << " - " << pg.substr(n) << endl;
-    });
-  cout << endl;
-
-
-  cout << "LEAF:" << endl;
-  vector<int> bla(parse_graph->size());
-  parse_graph->visit_bottom_up(0, [&bla](ParseGraph &pg, int n){
-      cout << n << " {" << pg.name(n) << " : " << pg.substr(n) << endl;
-      bla[n] = 1;
-      //for (int c : pg.nodes[n].children) {
-      //  cout << c << " }" << pg.name(c) << " : " << pg.substr(c) << endl;
-      //  if (bla[c] == 1)
-      //    throw "";
-      //}
-    });
 
   
 }
