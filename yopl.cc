@@ -1,7 +1,10 @@
 #include "../yagll/yagll.h"
 
-using namespace std;
+#include <fstream>
+#include <iostream>
+#include <string>
 
+using namespace std;
 int main(int argc, char **argv) {
   cout << "yopl" << endl;
   if (argc < 3) {
@@ -16,10 +19,8 @@ int main(int argc, char **argv) {
   ifstream gram_file(gram_path);
   ifstream input_file(input_path);
 
-  ifstream gram_in(gram_file);
-  Parser parser(gram_in);
-  ifstream input_in(input_file);
-  auto parse_graph = parser.parse(input_in);
+  Parser parser(gram_file);
+  auto parse_graph = parser.parse(input_file);
   
   if (!parse_graph)
     return 0;

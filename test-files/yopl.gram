@@ -4,7 +4,7 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry classdef | functiondef | block | line | comment | branch | flow | continue | ''
+entry classdef | functiondef | block | line | comment | branch | flow | continue | empty:''
 block '\[\n' entries '\]' optcom '\n'
 classdef '\[' name '\]\n' clentries
 line stat | alloc | vardef | inc | dec
@@ -56,5 +56,5 @@ inputs input | input ',' rws inputs
 input name | '\(' value '\)' | str
 outputs names
 names name | name ',' rws names
-str '\"' '[^\"]*' '\"'
+str '\"' content:'[^\"]*' '\"'
 continue '>' | continue '>'

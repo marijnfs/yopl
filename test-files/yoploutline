@@ -1,0 +1,66 @@
+#comment
+
+[Node]
+i64 id
+f64 val
+ui64* vals
+
+#A typed function definition
+Node a -> size -> i64 s
+   s = a.vals[]
+]
+
+# A random block, to contain scope / control lifetime of vars
+[
+   a[10] #a gets allocated (i64 is default)
+] #a gets deleted
+
+a, b -> calc -> c
+   a = 4 * a
+   a > 3 ?
+      c = a
+   |
+      c = f
+   ]
+]
+
+a -> bla -> c
+   c = a * 3
+]
+
+a = 4
+Node n
+n.val = 3
+n.vals[10] #allocation
+n.vals.a = 5
+n.vals.(n.val) = 4
+valsize = n.vals[] #get the nr of elements
+
+
+b = 5
+
+a = 0
+a > print > print
+
+a > 10 ?
+   a > print
+   a > print, a
+   a > print > print
+   (a > bla), b > calc > print > print
+   >>
+^]
+
+
+
+a > 10 ?
+   a = a + 1
+   a++
+   b--
+   s.b++
+   (a > bla), b > calc > print
+^|
+   "while ended" > print
+]
+
+>
+
