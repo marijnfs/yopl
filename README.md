@@ -36,7 +36,6 @@ Marijn Stollenga
 
 Examples
 =======
-<<<<<<< HEAD
 Examples are being added soon
 
 Author
@@ -49,5 +48,5 @@ Licence for all files in this repository: MPLv2.0, See LICENCE file
 =======
 See test-files.
 ![parse graph](./images/compact.svg)
->>>>>>> 23406dd7c9ff9c86237da659673ca8bde8c493a7
+
 
