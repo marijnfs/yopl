@@ -10,7 +10,7 @@ classdef '\[' name '\]\n' clentries
 line stat | alloc | vardef | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
-basetype 'i64' | 'ui64' | 'i32' | 'ui32' | 'f64' | 'f32' | 'c' | 'u16' | 'ui16'
+basetype 'i64' | 'u64' | 'i32' | 'u32' | 'f64' | 'f32' | 'c' | 'i16' | 'u16'
 type basetype ptr | name ptr
 ptr '\*' | noptr
 noptr ''
@@ -21,15 +21,16 @@ clentries clentry | clentry clentries
 clentry vardef '\n'
 functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
 items item | item ',' rws items
-item varname | vardef
-varname name | name '\.' varname | int | '\(' value '\)'
+item name | vardef
+varname indexname '\.' varname | indexname
+indexname name | int | '\(' value '\)'
 stat varname rws '=' rws value
 value flow | number | arraysize | exp
 number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp binop | expb | inc | dec
+exp binop | expb | inc | dec | varname
 inc varname '\+\+'
 dec varname '\-\-'
 binop plus | min | times | divide
@@ -38,23 +39,24 @@ min exp rws '-' rws exp
 times expb rws '\*' rws expb
 divide expb rws '\/' rws expb
 expb number | varname | '\(' exp '\)'
+cmpstat cmp | expcomma rws cmp
+expcomma line | line ',' rws expcomma
 cmp less | more | eq | noteq
 less value rws '<' rws value
 more value rws '>' rws value
 eq value rws '==' rws value
 noteq value rws '!=' rws value
-branch cmp rws '\?' '\n' branchblocks
+branch cmpstat rws '\?' '\n' branchblocks
 branchblocks branchfinal | branchblock branchblocks
 branchblock entries ws optjmp '\|' '\n'
 branchfinal entries ws optjmp '\]'
 optjmp jmp | nojmp
 jmp '\^'
 nojmp ''
-flow inflow rws '\>' rws outputs
-inflow flow | inputs
-inputs input | input ',' rws inputs
-input name | '\(' value '\)' | str
-outputs names
-names name | name ',' rws names
-str '\"' content:'[^\"]*' '\"'
+flow sources | flow rws '\>' rws nodes
+nodes node | nodes rws node
+sources source | sources rws source
+source '\(' exp '\)' | number | node | varname | str
+node name | '\(' flow '\)'
+str '\"' content:'[^\"]*' '\"' | "\'" content:"[^\']*" "\'"
 continue '>' | continue '>'

@@ -26,7 +26,32 @@ int main(int argc, char **argv) {
     return 0;
 
   cout << "nodes: " << parse_graph->size() << endl;
+  parse_graph->filter([](ParseGraph &pg, int n) {
+    if (pg.name(n) == "entryln")
+      pg.cleanup[n] = true;
+    if (pg.name(n) == "nocomment" && pg.substr(n) == "")
+      pg.cleanup[n] = true;
+        
+  });
+
+  parse_graph->remove([](ParseGraph &pg, int n) -> bool {
+    if (pg.name(n) == "entry" && pg.get_one(n, "empty") != -1)
+      return true;
+    if (pg.name(n) == "optcom" && pg.substr(n).size() == 0)
+      return true;
+    return false;
+  });
+
+  parse_graph->squeeze([](ParseGraph &pg, int n) -> bool {
+    auto name = pg.name(n);
+    return name == "items" || name == "entries" || name == "nodes";
+    ;
+  });
+
   parse_graph->print_dot("compact.dot");
+
+
+
 
   /*
   for (int n(0); n < parse_graph->nodes.size(); ++n) {
