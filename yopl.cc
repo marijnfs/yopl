@@ -4,6 +4,11 @@
 #include <iostream>
 #include <string>
 
+#include <experimental/filesystem>
+
+namespace fs = std::experimental::filesystem;
+
+
 using namespace std;
 int main(int argc, char **argv) {
   cout << "yopl" << endl;
@@ -12,9 +17,17 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  int bla;
-  string gram_path(argv[1]);
-  string input_path(argv[2]);
+  fs::path gram_path(argv[1]);
+  fs::path input_path(argv[2]);
+
+  if (!fs::exists(gram_path))
+    throw StringException("Grammar file doesn't exist");
+  if (!fs::exists(input_path))
+    throw StringException("Input file doesn't exist");
+
+  for (auto file : fs::directory_iterator(input_path.parent_path())) {
+    cout << file << endl;
+  }
 
   ifstream gram_file(gram_path);
   ifstream input_file(input_path);
@@ -26,12 +39,12 @@ int main(int argc, char **argv) {
     return 0;
 
   cout << "nodes: " << parse_graph->size() << endl;
-  parse_graph->filter([](ParseGraph &pg, int n) {
+  parse_graph->filter([](ParseGraph &pg, int n) -> bool {
     if (pg.name(n) == "entryln")
-      pg.cleanup[n] = true;
+      return true;
     if (pg.name(n) == "nocomment" && pg.substr(n) == "")
-      pg.cleanup[n] = true;
-        
+      return true;
+    return false;        
   });
 
   parse_graph->remove([](ParseGraph &pg, int n) -> bool {
@@ -44,9 +57,18 @@ int main(int argc, char **argv) {
 
   parse_graph->squeeze([](ParseGraph &pg, int n) -> bool {
     auto name = pg.name(n);
-    return name == "items" || name == "entries" || name == "nodes";
-    ;
+    return name == "items" || name == "entries" || name == "clentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
   });
+
+  ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
+    auto name = pg.name(n);
+    if (name == "classdef") {
+      cout << "found class: " << pg.substr(pg.children(n)[0]) << endl;
+      return false;
+    }
+    return true;
+  });
+  parse_graph->visit_dfs(0, cb);
 
   parse_graph->print_dot("compact.dot");
 
