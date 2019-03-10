@@ -82,4 +82,4 @@ a > 10 ?
    "while ended" > print
 ]
 
->
+a.b.2++

@@ -10,6 +10,38 @@ namespace fs = std::experimental::filesystem;
 
 
 using namespace std;
+
+void tree_print(ParseGraph &pg, int n, int depth) {
+  for (int i(0); i < depth; ++i)
+    cout << "  ";
+  if (pg.name(n) == "name" || pg.name(n) == "varname" || pg.name(n) == "value" || pg.name(n) == "number")
+    cout << "[" << pg.starts[n] << "] " << pg.name(n) << "(" << pg.substr(n) << ")" << endl;
+  else
+    cout << pg.name(n) << endl;
+
+  for (auto c : pg.children(n))
+    tree_print(pg, c, depth + 1); 
+}
+
+struct FunctionBuilder {
+
+  FunctionBuilder() {
+
+  }
+
+  // std::vector<Type *> inputs;
+  // FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), inputs, false);
+  // Function *bla =
+  //     Function::Create(FT, Function::ExternalLinkage, "bla", mod);
+
+  // bla->setCallingConv(CallingConv::C);
+
+  // // auto args = bla->arg_begin();
+
+  // BasicBlock *block = BasicBlock::Create(C, "entry", bla);
+
+};
+
 int main(int argc, char **argv) {
   cout << "yopl" << endl;
   if (argc < 3) {
@@ -38,6 +70,7 @@ int main(int argc, char **argv) {
   if (!parse_graph)
     return 0;
 
+  //filter empty lines and empty comments
   cout << "nodes: " << parse_graph->size() << endl;
   parse_graph->filter([](ParseGraph &pg, int n) -> bool {
     if (pg.name(n) == "entryln")
@@ -47,6 +80,7 @@ int main(int argc, char **argv) {
     return false;        
   });
 
+  //remove empty stuff
   parse_graph->remove([](ParseGraph &pg, int n) -> bool {
     if (pg.name(n) == "entry" && pg.get_one(n, "empty") != -1)
       return true;
@@ -55,11 +89,18 @@ int main(int argc, char **argv) {
     return false;
   });
 
+  //squeeze recursive multi-items
   parse_graph->squeeze([](ParseGraph &pg, int n) -> bool {
     auto name = pg.name(n);
-    return name == "items" || name == "entries" || name == "clentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
+     return name == "items" || name == "entries" || name == "clentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
+    // return name == "items" || name == "entries" || name == "clentries" || name == "varname" || name == "sources";
   });
 
+
+  parse_graph->sort_children([&parse_graph](int a, int b) -> bool {
+    return parse_graph->starts[a] < parse_graph->starts[b];
+  });
+  //Actually process the info
   ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
     auto name = pg.name(n);
     if (name == "classdef") {
@@ -68,25 +109,10 @@ int main(int argc, char **argv) {
     }
     return true;
   });
-  parse_graph->visit_dfs(0, cb);
 
+  parse_graph->visit_dfs(0, cb);
   parse_graph->print_dot("compact.dot");
 
 
-
-
-  /*
-  for (int n(0); n < parse_graph->nodes.size(); ++n) {
-    if (parse_graph->name_ids[n] >= 0) {
-      string sub = parse_graph->ends[n] < 0
-                       ? "NEG"
-                       : parser.buffer.substr(parse_graph->starts[n],
-                                              parse_graph->ends[n] -
-                                                  parse_graph->starts[n]);
-      cout << parse_graph->name_map[parse_graph->name_ids[n]] << " " << sub
-           << " " << parse_graph->starts[n] << endl;
-    }
-    }*/
-
-  
+  tree_print(*parse_graph, 0, 0);
 }
