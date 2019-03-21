@@ -1,4 +1,5 @@
 #include "../yagll/yagll.h"
+#include "print.h"
 
 #include <fstream>
 #include <iostream>
@@ -14,10 +15,10 @@ using namespace std;
 void tree_print(ParseGraph &pg, int n, int depth) {
   for (int i(0); i < depth; ++i)
     cout << "  ";
-  if (pg.name(n) == "name" || pg.name(n) == "varname" || pg.name(n) == "value" || pg.name(n) == "number")
-    cout << "[" << pg.starts[n] << "] " << pg.name(n) << "(" << pg.substr(n) << ")" << endl;
+  if (pg.type(n) == "name" || pg.type(n) == "varname" || pg.type(n) == "value" || pg.type(n) == "number")
+    cout << "[" << pg.starts[n] << "] " << pg.type(n) << "(" << pg.text(n) << ")" << endl;
   else
-    cout << pg.name(n) << endl;
+    cout << pg.type(n) << endl;
 
   for (auto c : pg.children(n))
     tree_print(pg, c, depth + 1); 
@@ -73,25 +74,25 @@ int main(int argc, char **argv) {
   //filter empty lines and empty comments
   cout << "nodes: " << parse_graph->size() << endl;
   parse_graph->filter([](ParseGraph &pg, int n) -> bool {
-    if (pg.name(n) == "entryln")
+    if (pg.type(n) == "entryln")
       return true;
-    if (pg.name(n) == "nocomment" && pg.substr(n) == "")
+    if (pg.type(n) == "nocomment" && pg.text(n) == "")
       return true;
     return false;        
   });
 
   //remove empty stuff
   parse_graph->remove([](ParseGraph &pg, int n) -> bool {
-    if (pg.name(n) == "entry" && pg.get_one(n, "empty") != -1)
+    if (pg.type(n) == "entry" && pg.get_one(n, "empty") != -1)
       return true;
-    if (pg.name(n) == "optcom" && pg.substr(n).size() == 0)
+    if (pg.type(n) == "optcom" && pg.text(n).size() == 0)
       return true;
     return false;
   });
 
   //squeeze recursive multi-items
   parse_graph->squeeze([](ParseGraph &pg, int n) -> bool {
-    auto name = pg.name(n);
+    auto name = pg.type(n);
      return name == "items" || name == "entries" || name == "clentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
     // return name == "items" || name == "entries" || name == "clentries" || name == "varname" || name == "sources";
   });
@@ -100,11 +101,12 @@ int main(int argc, char **argv) {
   parse_graph->sort_children([&parse_graph](int a, int b) -> bool {
     return parse_graph->starts[a] < parse_graph->starts[b];
   });
+
   //Actually process the info
   ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
-    auto name = pg.name(n);
+    auto name = pg.type(n);
     if (name == "classdef") {
-      cout << "found class: " << pg.substr(pg.children(n)[0]) << endl;
+      cout << "found class: " << pg.text(pg.children(n)[0]) << endl;
       return false;
     }
     return true;
@@ -115,4 +117,20 @@ int main(int argc, char **argv) {
 
 
   tree_print(*parse_graph, 0, 0);
+
+
+  parse_graph->visit_dfs_filtered(0, [](ParseGraph &pg, int n) -> bool {
+    if (pg.type(n) == "functiondef") {
+        print(pg.type(n));
+        print("func", pg.text(pg.children(n)[1]));
+        pg.visit_dfs_filtered(n, [](ParseGraph &pg, int n) -> bool {
+          if (pg.type(n) == "name")
+            print(pg.text(n));
+          return true;
+        });
+        return false;
+    }
+
+    return true;
+  });
 }
