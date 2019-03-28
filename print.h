@@ -9,6 +9,6 @@ template <typename T> void print(const T& t) {
 }
 
 template <typename First, typename... Rest> void print(const First& first, const Rest&... rest) {
-    std::cout << first << " ";
+    std::cout << first;
     print(rest...); // recursive call using pack expansion syntax
 }

@@ -10,8 +10,10 @@ classdef '\[' name '\]\n' clentries
 line stat | alloc | vardef | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
-basetype 'i64' | 'u64' | 'i32' | 'u32' | 'f64' | 'f32' | 'c' | 'i16' | 'u16'
-type basetype ptr | name ptr
+basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
+type basetype | classtype
+classtype name ptr
+basetype basetypename ptr
 ptr '\*' | noptr
 noptr ''
 vardef type rws name
