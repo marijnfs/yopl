@@ -32,8 +32,6 @@ void tree_print(ParseGraph &pg, int n, int depth) {
 
 typedef vector<variant<llvm::Value*, llvm::Type*>> ValueVector;
 struct Context {
-
-  ValueVector value_vector;
   map<string, llvm::Value*> value_map;
   Context *parent = nullptr;
 
@@ -57,9 +55,19 @@ struct ModuleBuilder {
   unique_ptr<llvm::Module> module;
   // unique_ptr<BasicBlock> block;
   Context context;
+  ValueVector value_vector;
 
   ModuleBuilder(LLVMContext &C_, string name) : C(C_), module(nullptr) {
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+
     module.reset(new llvm::Module(name, C));
+  }
+
+  void process_parsegraph(ParseGraph &pg) {
+    value_vector.resize(pg.size());
+    process_module(pg, 0);
   }
 
   void process_module(ParseGraph &pg, int n) {
@@ -71,13 +79,13 @@ struct ModuleBuilder {
     blafunc->setCallingConv(CallingConv::C);
 
 
-    auto block = llvm::BasicBlock::Create(C, "entry", 0);
+    auto block = llvm::BasicBlock::Create(C, "entry", blafunc);
     auto rulename = pg.type(n);
 
     cout << "Building function: " << endl;
 
     pg.visit_dfs_filtered(n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, block));
-    ReturnInst::Create(C, llvm::ConstantFP::get(C, APFloat(0.0)), block);
+    ReturnInst::Create(C, llvm::ConstantFP::get(C, APFloat(2.0)), block);
 
 
     std::string errStr;
@@ -102,14 +110,20 @@ struct ModuleBuilder {
 
     typedef double bla();
     bla *f = (bla *)EE->getFunctionAddress("bla");
+    print(EE->getFunctionAddress("bla"));
+    print("func: ptr", f);
     double result = f();
     print(result);
   }
 
   bool process_lines(ParseGraph &pg, int n, Context &context, BasicBlock *block) {
     auto rulename = pg.type(n);
+    print(rulename, " ", n);
     if (rulename == "line") {
-      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, context.value_vector, context.value_map, block));
+
+      print("starting bottom up for line");
+      print(pg.text(n));
+      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, value_vector, context.value_map, block));
       return false;
     }
 
@@ -150,11 +164,13 @@ struct ModuleBuilder {
 
   void process_exp(ParseGraph &pg, int n, ValueVector &val_vec, map<string, llvm::Value*> &value_map, BasicBlock *block) {
     auto rulename = pg.type(n);
+    print("process_exp ", rulename, ": ", pg.text(n));
     if (rulename == "number") {
       double val(0);
       istringstream iss(pg.text(n));
       iss >> val;
       val_vec[n] = llvm::ConstantFP::get(C, APFloat(val));
+      print("created number ", get<Value*>(val_vec[n]));
     } 
     else if (rulename == "times") {
       int c1 = pg.children(n)[0];
@@ -183,12 +199,18 @@ struct ModuleBuilder {
       auto var_name = pg.text(c1);
       auto value_ptr = context.get_value(var_name);
       if (!value_ptr) {
+        print("adding alloca ", var_name);
         value_ptr = new AllocaInst(Type::getDoubleTy(C), 0, var_name, block);
         context.add_value(var_name, value_ptr);
       }
+      print(c1, ' ', val_vec.size());
+      print(holds_alternative<Value*>(val_vec[c2]));
+      print(get<Value*>(val_vec[c2]));
+
+      print("adding storeinst ", var_name);
       val_vec[n] = new llvm::StoreInst(get<llvm::Value*>(val_vec[c2]), value_ptr, block);
     }
-    else if (rulename == "var") {
+    else if (rulename == "var" || rulename == "indexname") {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
       auto value_ptr = context.get_value(var_name);
@@ -196,7 +218,12 @@ struct ModuleBuilder {
         cerr << "no variable called " << var_name << endl;
         return;
       }
+        print("adding loadinst ", var_name);
       val_vec[n] = new llvm::LoadInst(value_ptr, 0, block);
+    } 
+    else {
+      //for all other nodes, just propagate the ptr
+      val_vec[n] = val_vec[pg.children(n)[0]];
     }
 
   }
@@ -310,6 +337,6 @@ int main(int argc, char **argv) {
 
   LLVMContext C;
   ModuleBuilder module_builder(C, "module");
-  module_builder.process_module(*parse_graph, 0);
+  module_builder.process_parsegraph(*parse_graph);
 
 }

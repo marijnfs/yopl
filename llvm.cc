@@ -270,10 +270,15 @@ int main(int argc, char **argv) {
     cout << "failed verification" << endl;
     return 1;
   }
+  if (verifyModule(*module, &outs())) {
+    cout << "failed verification" << endl;
+    return 1;
+  }
   // if (verifyModule(*module)) {
   //   errs() << argv[0] << ": Error constructing function!\n";
   //   return 1;
   // }
+
 
   ExecutionEngine *EE =
       EngineBuilder(std::move(module)).setErrorStr(&errStr).create();
