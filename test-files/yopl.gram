@@ -7,7 +7,8 @@ comment ws '#' comstr:'[^\n]*'
 entry classdef | functiondef | block | line | comment | branch | flow | continue | empty:''
 block '\[\n' entries '\]' optcom '\n'
 classdef '\[' name '\]\n' clentries
-line stat | alloc | vardef | inc | dec
+#line stat | ret | alloc | inc | dec | vardef
+line stat | ret | alloc | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
 basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
@@ -17,6 +18,8 @@ basetype basetypename ptr
 ptr '\*' | noptr
 noptr ''
 vardef type rws name
+ret 'ret' rws loadvar
+loadvar varname
 rws '[ \t]+'
 ws '[ \t]*'
 clentries clentry | clentry clentries
@@ -32,15 +35,15 @@ number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp binop | expb | inc | dec | varname
-inc varname '\+\+'
-dec varname '\-\-'
+exp binop | expb | inc | dec | loadvar
+inc loadvar '\+\+'
+dec loadvar '\-\-'
 binop plus | min | times | divide
 plus exp rws '\+' rws exp
 min exp rws '-' rws exp
 times expb rws '\*' rws expb
 divide expb rws '\/' rws expb
-expb number | varname | '\(' exp '\)'
+expb number | loadvar | '\(' exp '\)'
 cmpstat cmp | expcomma rws cmp
 expcomma line | line ',' rws expcomma
 cmp less | more | eq | noteq
@@ -58,7 +61,7 @@ nojmp ''
 flow sources | flow rws '\>' rws nodes
 nodes node | nodes rws node
 sources source | sources rws source
-source '\(' exp '\)' | number | node | varname | str
+source '\(' exp '\)' | number | node | loadvar | str
 node name | '\(' flow '\)'
 str '\"' content:'[^\"]*' '\"' | "\'" content:"[^\']*" "\'"
 continue '>' | continue '>'

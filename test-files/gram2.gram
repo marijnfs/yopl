@@ -1,6 +1,8 @@
 S line '\n' | line '\n' S
 ws '[ ]+'
-line rulename ws options
+line ruledef | comment
+ruledef rulename ws options
+comment '#' comstr:'[^\n]*'
 options option | options ws '\|' ws option
 option ruleset
 ruleset rule ws ruleset | rule
