@@ -170,7 +170,7 @@ struct ModuleBuilder {
     else if (rulename == "plus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      println("> adding plus");
+      println("> adding fadd ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
       val_vec[n] = builder.CreateFAdd(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
     }
     else if (rulename == "minus") {
@@ -218,7 +218,12 @@ struct ModuleBuilder {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
       auto value_ptr = get<llvm::Value*>(val_vec[c1]);
-      auto add_inst = builder.CreateFAdd(value_ptr, llvm::ConstantFP::get(C, APFloat(1.0)));
+      auto load = builder.CreateLoad(value_ptr, false);
+      auto constant = llvm::ConstantFP::get(C, APFloat(1.0));
+      println("> adding fadd ", value_ptr, " ", constant);
+
+      auto add_inst = builder.CreateFAdd(load, constant);
+      println("> adding store ", add_inst);
       builder.CreateStore(add_inst, value_ptr);
       val_vec[n] = add_inst;
     }
@@ -226,6 +231,7 @@ struct ModuleBuilder {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
       auto value_ptr = get<llvm::Value*>(val_vec[c1]);
+      auto load = builder.CreateLoad(value_ptr, false);
       auto add_inst = builder.CreateFSub(value_ptr, llvm::ConstantFP::get(C, APFloat(1.0)));
       builder.CreateStore(add_inst, value_ptr);
       val_vec[n] = add_inst;

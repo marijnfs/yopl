@@ -37,8 +37,8 @@ int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
 exp number | binop | expb | inc | dec | loadvar
-inc '\+\+' loadvar
-dec '\-\-' loadvar
+inc '\+\+' loadvarptr
+dec '\-\-' loadvarptr
 binop plus | minus | times | divide
 plus exp rws '\+' rws exp
 minus exp rws '-' rws exp
