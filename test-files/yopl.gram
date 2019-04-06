@@ -18,8 +18,9 @@ basetype basetypename ptr
 ptr '\*' | noptr
 noptr ''
 vardef type rws name
-ret 'ret' rws loadvar
+ret 'ret' rws exp
 loadvar varname
+loadvarptr varname
 rws '[ \t]+'
 ws '[ \t]*'
 clentries clentry | clentry clentries
@@ -29,18 +30,18 @@ items item | item ',' rws items
 item name | vardef
 varname indexname '\.' varname | indexname
 indexname name | int | '\(' value '\)'
-stat varname rws '=' rws value
+stat loadvarptr rws '=' rws value
 value flow | number | arraysize | exp
 number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp binop | expb | inc | dec | loadvar
-inc loadvar '\+\+'
-dec loadvar '\-\-'
-binop plus | min | times | divide
+exp number | binop | expb | inc | dec | loadvar
+inc '\+\+' loadvar
+dec '\-\-' loadvar
+binop plus | minus | times | divide
 plus exp rws '\+' rws exp
-min exp rws '-' rws exp
+minus exp rws '-' rws exp
 times expb rws '\*' rws expb
 divide expb rws '\/' rws expb
 expb number | loadvar | '\(' exp '\)'

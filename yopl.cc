@@ -23,7 +23,7 @@ void tree_print(ParseGraph &pg, int n, int depth) {
   for (int i(0); i < depth; ++i)
     cout << "  ";
   if (pg.type(n) == "name" || pg.type(n) == "varname" || pg.type(n) == "value" || pg.type(n) == "number")
-    cout << "[" << pg.starts[n] << "] " << pg.type(n) << "(" << pg.text(n) << ")" << endl;
+    cout << pg.type(n) << "(" << pg.text(n) << ")" << endl;
   else
     cout << pg.type(n) << endl;
 
@@ -39,6 +39,7 @@ struct Context {
   Context(Context *parent_ = nullptr) : parent(parent_) {}
 
   llvm::Value* get_value(string name) {
+    println("getval: ", name);
     if (value_map.count(name))
       return value_map[name];
     if (parent)
@@ -112,22 +113,22 @@ struct ModuleBuilder {
 
     typedef double MainFunc();
     MainFunc *f = (MainFunc*) EE->getFunctionAddress("main");
-    print(EE->getFunctionAddress("main"));
-    print("func: ptr", f);
+    println(EE->getFunctionAddress("main"));
+    println("func: ptr", f);
     double result = f();
-    print(result);
+    println(result);
   }
 
   bool process_lines(ParseGraph &pg, int n, Context &context, llvm::IRBuilder<> &builder) {
     auto rulename = pg.type(n);
     if (rulename == "line") {
-      print("starting bottom up for line");
+      println("+exp bottom up start");
       pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, value_vector, context.value_map, builder));
       return false;
     }
     if (rulename == "branch") {
-      print("starting bottom up for line");
-      
+      println("starting bottom up for branch");
+
       pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, value_vector, context.value_map, builder));
       return false;
     }
@@ -135,84 +136,67 @@ struct ModuleBuilder {
     if (rulename == "classdef") {
       int name_n = pg.children(n)[0];
       string class_name = pg.text(name_n);
-      print("class ", class_name);
+      println("class ", class_name);
       pg.visit_dfs(n, bind(&ModuleBuilder::process_classdef, this, _1, _2));
       return false;
     }
     return true;
   }
 
-  void process_type(ParseGraph &pg, int n, ValueVector &val_vec) {
-    auto rulename = pg.type(n);
-    if (rulename == "basetype") {
-      auto basetypen = pg.children(n)[0];
-      auto basetypename = pg.text(basetypen);
-      bool is_ptr = pg.get_one(n, "noptr") == -1;
-      if (!is_ptr) {
-        if (basetypename == "i64")
-          val_vec[n] = llvm::Type::getInt64Ty(C);
-        if (basetypename == "i32")
-          val_vec[n] = llvm::Type::getInt32Ty(C);
-        if (basetypename == "i16")
-          val_vec[n] = llvm::Type::getInt16Ty(C);
-        if (basetypename == "f32")
-          val_vec[n] = llvm::Type::getFloatTy(C);
-        if (basetypename == "f64")
-          val_vec[n] = llvm::Type::getDoubleTy(C);
-      }
-    }
-  }
-
-  void process_classdef(ParseGraph &pg, int n) {
-    
-  }
 
   void process_exp(ParseGraph &pg, int n, ValueVector &val_vec, map<string, llvm::Value*> &value_map, llvm::IRBuilder<> &builder) {
     auto rulename = pg.type(n);
-    print("exp: ", rulename);
+    println("exp: ", rulename);
 
     if (rulename == "number") {
       double val(0);
       istringstream iss(pg.text(n));
       iss >> val;
       val_vec[n] = llvm::ConstantFP::get(C, APFloat(val));
-      print("created number ", get<Value*>(val_vec[n]));
+      println("> created constant ", val, " ", get<Value*>(val_vec[n]));
     } 
     else if (rulename == "times") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      print("adding times");
-      val_vec[n] = builder.CreateFSub(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      println("> adding fmul ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
+      val_vec[n] = builder.CreateFMul(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
     } 
     else if (rulename == "divide") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
+      println("> adding fdiv ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
       val_vec[n] = builder.CreateFDiv(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
     } 
     else if (rulename == "plus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      print("adding plus");
+      println("> adding plus");
       val_vec[n] = builder.CreateFAdd(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
     }
     else if (rulename == "minus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
+      println("> adding fsub ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
       val_vec[n] = builder.CreateFSub(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
 
-    } 
+    }
+    else if (rulename == "loadvarptr") {
+      auto var_name = pg.text(n);
+      auto value_ptr = context.get_value(var_name);
+      if (!value_ptr) {
+        value_ptr = builder.CreateAlloca(Type::getDoubleTy(C), 0, var_name);
+        println("> adding alloca: ", var_name, " ", value_ptr);
+        context.add_value(var_name, value_ptr);
+      } 
+      val_vec[n] = value_ptr;
+    }
     else if (rulename == "stat") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      auto var_name = pg.text(c1);
-      auto value_ptr = context.get_value(var_name);
-      if (!value_ptr) {
-        print("adding alloca ", var_name);
-        value_ptr = builder.CreateAlloca(Type::getDoubleTy(C), 0, var_name);
-        context.add_value(var_name, value_ptr);
-      }
-      print("adding storeinst ", var_name);
-      val_vec[n] = builder.CreateStore(get<llvm::Value*>(val_vec[c2]), value_ptr);
+      auto value_ptr = get<llvm::Value*>(val_vec[c2]);
+      auto target_ptr = get<llvm::Value*>(val_vec[c1]);
+      println("> adding storeinst ", value_ptr, " to ", get<llvm::Value*>(val_vec[c1]));
+      val_vec[n] = builder.CreateStore(value_ptr, target_ptr);
     }
     else if (rulename == "loadvar") {
       int c1 = pg.children(n)[0];
@@ -222,39 +206,29 @@ struct ModuleBuilder {
         cerr << "no variable called " << var_name << endl;
         return;
       }
-      print("adding loadinst ", var_name);
+      println("> adding loadinst ", var_name, " ", value_ptr);
       val_vec[n] = builder.CreateLoad(value_ptr, false);
     }
     else if (rulename == "ret") {
       int c1 = pg.children(n)[0];
-      print("adding ret");
+      println("> adding ret");
       builder.CreateRet(get<llvm::Value*>(val_vec[c1]));
     }
     else if (rulename == "inc") {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
-      auto value_ptr = context.get_value(var_name);
-      if (!value_ptr) {
-        cerr << "no variable called " << var_name << endl;
-        return;
-      }
-      auto load_inst = builder.CreateLoad(value_ptr, false);
-      auto add_inst = builder.CreateFAdd(load_inst, llvm::ConstantFP::get(C, APFloat(1.0)));
+      auto value_ptr = get<llvm::Value*>(val_vec[c1]);
+      auto add_inst = builder.CreateFAdd(value_ptr, llvm::ConstantFP::get(C, APFloat(1.0)));
       builder.CreateStore(add_inst, value_ptr);
-      val_vec[n] = load_inst;
+      val_vec[n] = add_inst;
     }
     else if (rulename == "dec") {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
-      auto value_ptr = context.get_value(var_name);
-      if (!value_ptr) {
-        cerr << "no variable called " << var_name << endl;
-        return;
-      }
-      auto load_inst = builder.CreateLoad(value_ptr, false);
-      auto add_inst = builder.CreateFSub(load_inst, llvm::ConstantFP::get(C, APFloat(1.0)));
+      auto value_ptr = get<llvm::Value*>(val_vec[c1]);
+      auto add_inst = builder.CreateFSub(value_ptr, llvm::ConstantFP::get(C, APFloat(1.0)));
       builder.CreateStore(add_inst, value_ptr);
-      val_vec[n] = load_inst;
+      val_vec[n] = add_inst;
     }
 //       less value rws '<' rws value
 // more value rws '>' rws value
@@ -299,6 +273,31 @@ struct ModuleBuilder {
 
   }
 
+  void process_type(ParseGraph &pg, int n, ValueVector &val_vec) {
+    auto rulename = pg.type(n);
+    if (rulename == "basetype") {
+      auto basetypen = pg.children(n)[0];
+      auto basetypename = pg.text(basetypen);
+      bool is_ptr = pg.get_one(n, "noptr") == -1;
+      if (!is_ptr) {
+        if (basetypename == "i64")
+          val_vec[n] = llvm::Type::getInt64Ty(C);
+        if (basetypename == "i32")
+          val_vec[n] = llvm::Type::getInt32Ty(C);
+        if (basetypename == "i16")
+          val_vec[n] = llvm::Type::getInt16Ty(C);
+        if (basetypename == "f32")
+          val_vec[n] = llvm::Type::getFloatTy(C);
+        if (basetypename == "f64")
+          val_vec[n] = llvm::Type::getDoubleTy(C);
+      }
+    }
+  }
+
+  void process_classdef(ParseGraph &pg, int n) {
+    
+  }
+
 };
 
 struct Function {
@@ -322,11 +321,11 @@ int main(int argc, char **argv) {
   fs::path input_path(argv[2]);
 
   if (!fs::exists(gram_path)) {
-    print("Grammar file doesn't exist");
+    println("Grammar file doesn't exist");
     return -1;
   }
   if (!fs::exists(input_path)) {
-    print("Input file doesn't exist");
+    println("Input file doesn't exist");
     return -1;
   }
 
@@ -392,10 +391,10 @@ int main(int argc, char **argv) {
 
   parse_graph->visit_dfs_filtered(0, [](ParseGraph &pg, int n) -> bool {
     if (pg.type(n) == "functiondef") {
-        print("func", pg.text(pg.children(n)[1]));
+        println("func", pg.text(pg.children(n)[1]));
         pg.visit_dfs_filtered(n, [](ParseGraph &pg, int n) -> bool {
           if (pg.type(n) == "name")
-            print(pg.text(n));
+            println(pg.text(n));
           return true;
         });
         return false;
