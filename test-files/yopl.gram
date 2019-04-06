@@ -49,6 +49,8 @@ expcomma line | line ',' rws expcomma
 cmp less | more | eq | noteq
 less value rws '<' rws value
 more value rws '>' rws value
+lesseq value rws '<=' rws value
+moreeq value rws '>=' rws value
 eq value rws '==' rws value
 noteq value rws '!=' rws value
 branch cmpstat rws '\?' '\n' branchblocks
