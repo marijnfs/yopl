@@ -39,14 +39,13 @@ arraysize varname '\[\]'
 exp number | binop | expb | inc | dec | loadvar
 inc '\+\+' loadvarptr
 dec '\-\-' loadvarptr
+neg '\-' exp
 binop plus | minus | times | divide
 plus exp rws '\+' rws exp
 minus exp rws '-' rws exp
 times expb rws '\*' rws expb
 divide expb rws '\/' rws expb
-expb number | loadvar | '\(' exp '\)'
-cmpstat cmp | expcomma rws cmp
-expcomma line | line ',' rws expcomma
+expb '\(' exp '\)' | number | loadvar
 cmp less | more | eq | noteq
 less value rws '<' rws value
 more value rws '>' rws value
@@ -54,11 +53,16 @@ lesseq value rws '<=' rws value
 moreeq value rws '>=' rws value
 eq value rws '==' rws value
 noteq value rws '!=' rws value
-branch cmpstat rws '\?' '\n' branchblocks
-branchblocks branchfinal | branchblock branchblocks
-branchblock entries ws optjmp '\|' '\n'
+branch boolexp rws '\?' '\n' branchblock
+branchblock if | ifelse
+if branchfinal
+ifelse branchopt branchfinal
+branchopt entries ws optjmp '\|' '\n'
 branchfinal entries ws optjmp '\]'
 optjmp jmp | nojmp
+boolexp and | or | cmp
+and boolexp rws '&' rws boolexp
+or boolexp rws '|' rws boolexp
 jmp '\^'
 nojmp ''
 flow sources | flow rws '\>' rws nodes

@@ -75,24 +75,25 @@ struct ModuleBuilder {
   void process_module(ParseGraph &pg, int n) {
     std::vector<Type *> inputs;
     FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), inputs, false);
-    Function *blafunc =
+    Function *main_func =
       Function::Create(FT, Function::ExternalLinkage, "main", module.get());
 
-    blafunc->setCallingConv(CallingConv::C);
+    main_func->setCallingConv(CallingConv::C);
 
 
-    auto block = llvm::BasicBlock::Create(C, "entry", blafunc);
+    auto block = llvm::BasicBlock::Create(C, "entry", main_func);
     llvm::IRBuilder<> builder(block);
     
     auto rulename = pg.type(n);
 
     cout << "Building function: " << endl;
 
-    pg.visit_dfs_filtered(n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder));
+    pg.visit_dfs_filtered(n, bind(&ModuleBuilder::process_lines, this, _1, _2, &context, &builder, main_func));
     // ReturnInst::Create(C, llvm::ConstantFP::get(C, APFloat(2.0)), block);
 
+    main_func->print(outs());
     std::string errStr;
-    if (verifyFunction(*blafunc, &outs())) {
+    if (verifyFunction(*main_func, &outs())) {
       cout << "failed verification: " << errStr << endl;
       return;
     }
@@ -119,17 +120,65 @@ struct ModuleBuilder {
     println(result);
   }
 
-  bool process_lines(ParseGraph &pg, int n, Context &context, llvm::IRBuilder<> &builder) {
+  bool process_lines(ParseGraph &pg, int n, Context *context, llvm::IRBuilder<> *builder, Function *main_func) {
     auto rulename = pg.type(n);
     if (rulename == "line") {
       println("+exp bottom up start");
-      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, value_vector, context.value_map, builder));
+      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, context->value_map, builder));
       return false;
     }
     if (rulename == "branch") {
-      println("starting bottom up for branch");
+      int condition_n = pg.children(n)[0];
+      print("cond text:", pg.text(condition_n));
+      pg.visit_bottom_up(condition_n, bind(&ModuleBuilder::process_exp, this, _1, _2, context->value_map, builder));
 
-      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, value_vector, context.value_map, builder));
+      auto cond_val = get<llvm::Value*>(value_vector[condition_n]);
+      int branch_n = pg.get_one(n, set<string>{"if", "ifelse"});
+
+      if (pg.type(branch_n) == "if") { //only one branch
+        print("cond val ", cond_val);
+        auto if_block = llvm::BasicBlock::Create(C, "if", main_func);
+        auto continued = llvm::BasicBlock::Create(C, "continued", main_func);
+
+        print("> branch ", if_block, " ", continued);
+        builder->CreateCondBr(cond_val, if_block, continued);
+
+
+        builder->SetInsertPoint(if_block);
+
+        pg.visit_dfs_filtered(branch_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+
+        if (builder->GetInsertBlock()->getTerminator() == nullptr)
+          builder->CreateBr(continued);
+        builder->SetInsertPoint(continued); //not good when an if statement put insertpoitn somewhere else
+      }
+
+      if (pg.type(branch_n) == "ifelse") { //only one branch
+        int if_block_n = pg.children(branch_n)[0];
+        int else_block_n = pg.children(branch_n)[1];
+
+        auto if_block = llvm::BasicBlock::Create(C, "", main_func);
+        auto else_block = llvm::BasicBlock::Create(C, "", main_func);
+        auto continued = llvm::BasicBlock::Create(C, "", main_func);
+
+        builder->CreateCondBr(cond_val, if_block, else_block);
+
+        builder->SetInsertPoint(if_block);
+
+        pg.visit_dfs_filtered(if_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+        if (builder->GetInsertBlock()->getTerminator() == nullptr) {
+          print(">>had no terminator");
+          builder->CreateBr(continued);
+        }
+
+        builder->SetInsertPoint(else_block);
+        pg.visit_dfs_filtered(else_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+        if (else_block->getTerminator() == nullptr)
+          builder->CreateBr(continued);
+
+        builder->SetInsertPoint(continued);
+      }
+
       return false;
     }
 
@@ -144,7 +193,7 @@ struct ModuleBuilder {
   }
 
 
-  void process_exp(ParseGraph &pg, int n, ValueVector &val_vec, map<string, llvm::Value*> &value_map, llvm::IRBuilder<> &builder) {
+  void process_exp(ParseGraph &pg, int n, map<string, llvm::Value*> &value_map, llvm::IRBuilder<> *builder) {
     auto rulename = pg.type(n);
     println("exp: ", rulename);
 
@@ -152,51 +201,56 @@ struct ModuleBuilder {
       double val(0);
       istringstream iss(pg.text(n));
       iss >> val;
-      val_vec[n] = llvm::ConstantFP::get(C, APFloat(val));
-      println("> created constant ", val, " ", get<Value*>(val_vec[n]));
+      value_vector[n] = llvm::ConstantFP::get(C, APFloat(val));
+      println("> created constant ", val, " ", get<Value*>(value_vector[n]));
     } 
     else if (rulename == "times") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      println("> adding fmul ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
-      val_vec[n] = builder.CreateFMul(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      println("> adding fmul ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
+      value_vector[n] = builder->CreateFMul(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     } 
     else if (rulename == "divide") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      println("> adding fdiv ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
-      val_vec[n] = builder.CreateFDiv(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      println("> adding fdiv ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
+      value_vector[n] = builder->CreateFDiv(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     } 
     else if (rulename == "plus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      println("> adding fadd ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
-      val_vec[n] = builder.CreateFAdd(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      println("> adding fadd ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
+      value_vector[n] = builder->CreateFAdd(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else if (rulename == "minus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      println("> adding fsub ", get<llvm::Value*>(val_vec[c1]), " ", get<llvm::Value*>(val_vec[c2]));
-      val_vec[n] = builder.CreateFSub(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
-
+      println("> adding fsub ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
+      value_vector[n] = builder->CreateFSub(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
+    else if (rulename == "neg") {
+      int c1 = pg.children(n)[0];
+      println("> adding neg ", get<llvm::Value*>(value_vector[c1]));
+      value_vector[n] = builder->CreateFMul(get<llvm::Value*>(value_vector[c1]), llvm::ConstantFP::get(C, APFloat(-1.0)));
+    } 
+
     else if (rulename == "loadvarptr") {
       auto var_name = pg.text(n);
       auto value_ptr = context.get_value(var_name);
       if (!value_ptr) {
-        value_ptr = builder.CreateAlloca(Type::getDoubleTy(C), 0, var_name);
+        value_ptr = builder->CreateAlloca(Type::getDoubleTy(C), 0, var_name);
         println("> adding alloca: ", var_name, " ", value_ptr);
         context.add_value(var_name, value_ptr);
       } 
-      val_vec[n] = value_ptr;
+      value_vector[n] = value_ptr;
     }
     else if (rulename == "stat") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      auto value_ptr = get<llvm::Value*>(val_vec[c2]);
-      auto target_ptr = get<llvm::Value*>(val_vec[c1]);
-      println("> adding storeinst ", value_ptr, " to ", get<llvm::Value*>(val_vec[c1]));
-      val_vec[n] = builder.CreateStore(value_ptr, target_ptr);
+      auto value_ptr = get<llvm::Value*>(value_vector[c2]);
+      auto target_ptr = get<llvm::Value*>(value_vector[c1]);
+      println("> adding storeinst ", value_ptr, " to ", get<llvm::Value*>(value_vector[c1]));
+      value_vector[n] = builder->CreateStore(value_ptr, target_ptr);
     }
     else if (rulename == "loadvar") {
       int c1 = pg.children(n)[0];
@@ -207,79 +261,91 @@ struct ModuleBuilder {
         return;
       }
       println("> adding loadinst ", var_name, " ", value_ptr);
-      val_vec[n] = builder.CreateLoad(value_ptr, false);
+      value_vector[n] = builder->CreateLoad(value_ptr, false);
     }
     else if (rulename == "ret") {
       int c1 = pg.children(n)[0];
       println("> adding ret");
-      builder.CreateRet(get<llvm::Value*>(val_vec[c1]));
+      builder->CreateRet(get<llvm::Value*>(value_vector[c1]));
     }
     else if (rulename == "inc") {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
-      auto value_ptr = get<llvm::Value*>(val_vec[c1]);
-      auto load = builder.CreateLoad(value_ptr, false);
+      auto value_ptr = get<llvm::Value*>(value_vector[c1]);
+      auto load = builder->CreateLoad(value_ptr, false);
       auto constant = llvm::ConstantFP::get(C, APFloat(1.0));
       println("> adding fadd ", value_ptr, " ", constant);
 
-      auto add_inst = builder.CreateFAdd(load, constant);
+      auto add_inst = builder->CreateFAdd(load, constant);
       println("> adding store ", add_inst);
-      builder.CreateStore(add_inst, value_ptr);
-      val_vec[n] = add_inst;
+      builder->CreateStore(add_inst, value_ptr);
+      value_vector[n] = add_inst;
     }
     else if (rulename == "dec") {
       int c1 = pg.children(n)[0];
       auto var_name = pg.text(c1);
-      auto value_ptr = get<llvm::Value*>(val_vec[c1]);
-      auto load = builder.CreateLoad(value_ptr, false);
-      auto add_inst = builder.CreateFSub(value_ptr, llvm::ConstantFP::get(C, APFloat(1.0)));
-      builder.CreateStore(add_inst, value_ptr);
-      val_vec[n] = add_inst;
+      auto value_ptr = get<llvm::Value*>(value_vector[c1]);
+      auto load = builder->CreateLoad(value_ptr, false);
+      auto add_inst = builder->CreateFSub(load, llvm::ConstantFP::get(C, APFloat(1.0)));
+      builder->CreateStore(add_inst, value_ptr);
+      value_vector[n] = add_inst;
     }
-//       less value rws '<' rws value
-// more value rws '>' rws value
-// lesseq value rws '<=' rws value
-// moreeq value rws '>=' rws value
-// eq value rws '==' rws value
-// noteq value rws '!=' rws value
     else if (rulename == "less") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpULT(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      value_vector[n] = builder->CreateFCmpULT(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else if (rulename == "more") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpUGT(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      print("creating FCmpUGT");
+      value_vector[n] = builder->CreateFCmpUGT(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
+      print(get<llvm::Value*>(value_vector[n]));
     }
     else if (rulename == "lesseq") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpULE(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      value_vector[n] = builder->CreateFCmpULE(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else if (rulename == "moreeq") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpUGE(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      value_vector[n] = builder->CreateFCmpUGE(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else if (rulename == "noteq") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpUNE(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      value_vector[n] = builder->CreateFCmpUNE(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else if (rulename == "eq") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
-      val_vec[n] = builder.CreateFCmpUEQ(get<llvm::Value*>(val_vec[c1]), get<llvm::Value*>(val_vec[c2]));
+      value_vector[n] = builder->CreateFCmpUEQ(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
+    }
+    else if (rulename == "and") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      value_vector[n] = builder->CreateAnd(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
+    }
+    else if (rulename == "or") {
+      int c1 = pg.children(n)[0];
+      int c2 = pg.children(n)[1];
+      value_vector[n] = builder->CreateOr(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
     }
     else {
       //for all other nodes, just propagate the ptr
-      val_vec[n] = val_vec[pg.children(n)[0]];
+      if (pg.children(n).size() == 0) {
+        println("no children to propagate ", n, " type ", pg.type(n));
+        return;
+      }
+      println("propagate: ", get<llvm::Value*>(value_vector[pg.children(n)[0]]), " ", n, " ", pg.children(n)[0]);
+      value_vector[n] = value_vector[pg.children(n)[0]];
+      println(get<llvm::Value*>(value_vector[n]));
     }
 
   }
 
-  void process_type(ParseGraph &pg, int n, ValueVector &val_vec) {
+  void process_type(ParseGraph &pg, int n) {
     auto rulename = pg.type(n);
     if (rulename == "basetype") {
       auto basetypen = pg.children(n)[0];
@@ -287,15 +353,15 @@ struct ModuleBuilder {
       bool is_ptr = pg.get_one(n, "noptr") == -1;
       if (!is_ptr) {
         if (basetypename == "i64")
-          val_vec[n] = llvm::Type::getInt64Ty(C);
+          value_vector[n] = llvm::Type::getInt64Ty(C);
         if (basetypename == "i32")
-          val_vec[n] = llvm::Type::getInt32Ty(C);
+          value_vector[n] = llvm::Type::getInt32Ty(C);
         if (basetypename == "i16")
-          val_vec[n] = llvm::Type::getInt16Ty(C);
+          value_vector[n] = llvm::Type::getInt16Ty(C);
         if (basetypename == "f32")
-          val_vec[n] = llvm::Type::getFloatTy(C);
+          value_vector[n] = llvm::Type::getFloatTy(C);
         if (basetypename == "f64")
-          val_vec[n] = llvm::Type::getDoubleTy(C);
+          value_vector[n] = llvm::Type::getDoubleTy(C);
       }
     }
   }
