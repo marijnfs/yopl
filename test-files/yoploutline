@@ -7,7 +7,15 @@ i64 id
 f64 val
 u64* vals
 
-n.(n.vals.i).(n.vals.i)[10]
+N, id -> Node n
+   n.vals[N]
+   n.id = id
+]
+
+Node n
+n.vals[10]
+n.(n.vals.i).(n.vals.i)
+
 
 #A typed function definition
 Node a -> size -> i64 s
@@ -47,10 +55,12 @@ a -> bla -> c, d
 ]
 
 a = 4
+a > bla > > print
 a > bla > e f
-a > bla > print
+a, b > bla > print
 a > bla > print (bla > calc > print)
-Node n
+a Node
+
 n.val = 3
 n.vals[10] #allocation
 n.vals.a = 5
@@ -65,11 +75,9 @@ a > print > print
 
 a > 10 ?
    a > print
-   a > print a
    a > print > print
    >>
 ^]
-
 
 
 a > 10 ?

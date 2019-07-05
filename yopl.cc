@@ -32,6 +32,8 @@ void tree_print(ParseGraph &pg, int n, int depth) {
 }
 
 typedef vector<variant<llvm::Value*, llvm::Type*>> ValueVector;
+typedef map<string, llvm::Value*> ValueMap;
+
 struct Context {
   map<string, llvm::Value*> value_map;
   Context *parent = nullptr;
@@ -87,7 +89,6 @@ struct ModuleBuilder {
     auto rulename = pg.type(n);
 
     cout << "Building function: " << endl;
-
     pg.visit_dfs_filtered(n, bind(&ModuleBuilder::process_lines, this, _1, _2, &context, &builder, main_func));
     // ReturnInst::Create(C, llvm::ConstantFP::get(C, APFloat(2.0)), block);
 
@@ -120,7 +121,7 @@ struct ModuleBuilder {
     println(result);
   }
 
-  bool process_lines(ParseGraph &pg, int n, Context *context, llvm::IRBuilder<> *builder, Function *main_func) {
+  bool process_lines(ParseGraph &pg, int n, Context *context, llvm::IRBuilder<> *builder, llvm::Function *cur_func) {
     auto rulename = pg.type(n);
     if (rulename == "line") {
       println("+exp bottom up start");
@@ -136,9 +137,10 @@ struct ModuleBuilder {
       int branch_n = pg.get_one(n, set<string>{"if", "ifelse"});
 
       if (pg.type(branch_n) == "if") { //only one branch
+        print("Single val");
         print("cond val ", cond_val);
-        auto if_block = llvm::BasicBlock::Create(C, "if", main_func);
-        auto continued = llvm::BasicBlock::Create(C, "continued", main_func);
+        auto if_block = llvm::BasicBlock::Create(C, "if", cur_func);
+        auto continued = llvm::BasicBlock::Create(C, "continued", cur_func);
 
         print("> branch ", if_block, " ", continued);
         builder->CreateCondBr(cond_val, if_block, continued);
@@ -146,35 +148,37 @@ struct ModuleBuilder {
 
         builder->SetInsertPoint(if_block);
 
-        pg.visit_dfs_filtered(branch_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+        pg.visit_dfs_filtered(branch_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
 
         if (builder->GetInsertBlock()->getTerminator() == nullptr)
           builder->CreateBr(continued);
-        builder->SetInsertPoint(continued); //not good when an if statement put insertpoitn somewhere else
+        builder->SetInsertPoint(continued);
       }
 
-      if (pg.type(branch_n) == "ifelse") { //only one branch
+      if (pg.type(branch_n) == "ifelse") { //two branches
         int if_block_n = pg.children(branch_n)[0];
         int else_block_n = pg.children(branch_n)[1];
 
-        auto if_block = llvm::BasicBlock::Create(C, "", main_func);
-        auto else_block = llvm::BasicBlock::Create(C, "", main_func);
-        auto continued = llvm::BasicBlock::Create(C, "", main_func);
+        auto if_block = llvm::BasicBlock::Create(C, "", cur_func);
+        auto else_block = llvm::BasicBlock::Create(C, "", cur_func);
+        auto continued = llvm::BasicBlock::Create(C, "", cur_func);
 
         builder->CreateCondBr(cond_val, if_block, else_block);
 
         builder->SetInsertPoint(if_block);
 
-        pg.visit_dfs_filtered(if_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+        pg.visit_dfs_filtered(if_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
         if (builder->GetInsertBlock()->getTerminator() == nullptr) {
           print(">>had no terminator");
           builder->CreateBr(continued);
         }
 
         builder->SetInsertPoint(else_block);
-        pg.visit_dfs_filtered(else_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, main_func));
+        print(">>>");
+        pg.visit_dfs_filtered(else_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
         if (else_block->getTerminator() == nullptr)
           builder->CreateBr(continued);
+        print("<<<");
 
         builder->SetInsertPoint(continued);
       }
@@ -189,11 +193,52 @@ struct ModuleBuilder {
       pg.visit_dfs(n, bind(&ModuleBuilder::process_classdef, this, _1, _2));
       return false;
     }
+
+    if (rulename == "functiondef") {
+      int ins_n  = pg.children(n)[0];
+      int name_n = pg.children(n)[1];
+      int outs_n = pg.children(n)[2];
+      int body_n = pg.children(n)[3];
+      
+      auto func_name = pg.text(name_n);
+
+      pg.visit_bottom_up(ins_n, bind(&ModuleBuilder::process_type, this, _1, _2 ));
+      std::vector<Type*> inputs;
+      for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
+          inputs.push_back(get<llvm::Type*>(value_vector[c]));
+      }
+
+      // Function *mul_add = mod->getFunction("mul_add");
+      auto retType = Type::getInt32Ty(C);
+      FunctionType *FT = FunctionType::get(retType, inputs, false);
+      Function *func =
+          Function::Create(FT, Function::ExternalLinkage, func_name, module.get());
+      // Function *mul_add = cast<Function>(mod->getOrInsertFunction("muladd", FT));
+      func->setCallingConv(CallingConv::C);
+
+      auto args = func->arg_begin();
+      for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
+        auto name_n = pg.get_one(c, "name");
+        if (name_n < 0)
+          continue;
+        Argument *a = &*args++;
+        a->setName(pg.text(name_n));
+      }
+
+      BasicBlock *block = BasicBlock::Create(C, "entry", func, 0);
+      process_block(pg, body_n, builder);
+      print("> > function: ", func_name, " ", pg.text(ins_n), " > ", pg.text(outs_n));
+      return false;
+    }
     return true;
   }
 
+  void process_block(ParseGraph &pg, int n, llvm::IRBuilder<> *builder) {
 
-  void process_exp(ParseGraph &pg, int n, map<string, llvm::Value*> &value_map, llvm::IRBuilder<> *builder) {
+  }
+
+
+  void process_exp(ParseGraph &pg, int n, ValueMap &value_map, llvm::IRBuilder<> *builder) {
     auto rulename = pg.type(n);
     println("exp: ", rulename);
 
@@ -209,13 +254,13 @@ struct ModuleBuilder {
       int c2 = pg.children(n)[1];
       println("> adding fmul ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
       value_vector[n] = builder->CreateFMul(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
-    } 
+    }
     else if (rulename == "divide") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
       println("> adding fdiv ", get<llvm::Value*>(value_vector[c1]), " ", get<llvm::Value*>(value_vector[c2]));
       value_vector[n] = builder->CreateFDiv(get<llvm::Value*>(value_vector[c1]), get<llvm::Value*>(value_vector[c2]));
-    } 
+    }
     else if (rulename == "plus") {
       int c1 = pg.children(n)[0];
       int c2 = pg.children(n)[1];
@@ -232,8 +277,7 @@ struct ModuleBuilder {
       int c1 = pg.children(n)[0];
       println("> adding neg ", get<llvm::Value*>(value_vector[c1]));
       value_vector[n] = builder->CreateFMul(get<llvm::Value*>(value_vector[c1]), llvm::ConstantFP::get(C, APFloat(-1.0)));
-    } 
-
+    }
     else if (rulename == "loadvarptr") {
       auto var_name = pg.text(n);
       auto value_ptr = context.get_value(var_name);
@@ -249,7 +293,7 @@ struct ModuleBuilder {
       int c2 = pg.children(n)[1];
       auto value_ptr = get<llvm::Value*>(value_vector[c2]);
       auto target_ptr = get<llvm::Value*>(value_vector[c1]);
-      println("> adding storeinst ", value_ptr, " to ", get<llvm::Value*>(value_vector[c1]));
+      println("> adding storeinst ", pg.text(c1), " to ", get<llvm::Value*>(value_vector[c1]));
       value_vector[n] = builder->CreateStore(value_ptr, target_ptr);
     }
     else if (rulename == "loadvar") {
@@ -334,15 +378,8 @@ struct ModuleBuilder {
     }
     else {
       //for all other nodes, just propagate the ptr
-      if (pg.children(n).size() == 0) {
-        println("no children to propagate ", n, " type ", pg.type(n));
-        return;
-      }
-      println("propagate: ", get<llvm::Value*>(value_vector[pg.children(n)[0]]), " ", n, " ", pg.children(n)[0]);
-      value_vector[n] = value_vector[pg.children(n)[0]];
-      println(get<llvm::Value*>(value_vector[n]));
+      propagate(pg, n);
     }
-
   }
 
   void process_type(ParseGraph &pg, int n) {
@@ -363,11 +400,21 @@ struct ModuleBuilder {
         if (basetypename == "f64")
           value_vector[n] = llvm::Type::getDoubleTy(C);
       }
+    } else {
+      propagate(pg, n);
     }
   }
 
   void process_classdef(ParseGraph &pg, int n) {
     
+  }
+
+  void propagate(ParseGraph &pg, int n) {
+    if (pg.children(n).size() == 0) {
+      println("no children to propagate ", n, " type ", pg.type(n));
+      return;
+    }
+    value_vector[n] = value_vector[pg.children(n)[0]];
   }
 
 };
