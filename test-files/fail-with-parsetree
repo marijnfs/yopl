@@ -2,5 +2,14 @@ a = 3.5      #
 b = 2 + 4 * (a + 7)
 a < 3 ?
 	b = a
+|
+	b = a * 2
 ]
+
+i64 a -> somefunc -> i64 c
+	c = a
+	return c
+]
+
 ret b
+

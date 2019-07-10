@@ -74,8 +74,27 @@ struct ModuleBuilder {
     process_module(pg, 0);
   }
 
+  bool process_arguments(ParseGraph &pg, int n, vector<string> *names, vector<Type*> *types) {
+    if (pg.type(n) == "vardef") {
+      int name_n = pg.children(n)[0];
+      int type_n = pg.children(n)[1];
+      pg.visit_dfs(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
+
+      string name = pg.text(name_n);
+      llvm::Type *type = get<llvm::Type*>(value_vector[type_n]);
+
+      names->push_back(name);
+      types->push_back(type);
+      
+      return false;
+    }
+
+    return true;
+  }
+
   void process_module(ParseGraph &pg, int n) {
     std::vector<Type *> inputs;
+
     FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), inputs, false);
     Function *main_func =
       Function::Create(FT, Function::ExternalLinkage, "main", module.get());
@@ -93,13 +112,18 @@ struct ModuleBuilder {
     // ReturnInst::Create(C, llvm::ConstantFP::get(C, APFloat(2.0)), block);
 
     main_func->print(outs());
-    std::string errStr;
     if (verifyFunction(*main_func, &outs())) {
-      cout << "failed verification: " << errStr << endl;
+      cout << "Function failed verification: " << endl;
       return;
     }
 
+    if (verifyModule(*module, &outs())) {
+      cout << "Module failed verification: " << endl;
+      return;      
+    }
 
+
+    std::string errStr;
     ExecutionEngine *EE =
         EngineBuilder(std::move(module)).setErrorStr(&errStr).create();
 
@@ -121,17 +145,49 @@ struct ModuleBuilder {
     println(result);
   }
 
-  bool process_lines(ParseGraph &pg, int n, Context *context, llvm::IRBuilder<> *builder, llvm::Function *cur_func) {
+  void process_function(ParseGraph &pg, int n, Context *context) {
+    int input_n  = pg.children(n)[0];
+    int name_n   = pg.children(n)[1];
+    int output_n = pg.children(n)[2];
+    int entries_n = pg.children(n)[3];
+
+    vector<string> names;
+    vector<Type*> types;
+    pg.visit_dfs_filtered(input_n, bind(&ModuleBuilder::process_arguments, this, _1, _2, &names, &types));
+
+    auto funcname = pg.text(name_n);
+
+    FunctionType *FT = FunctionType::get(Type::getDoubleTy(C), types, false);
+
+    Function *new_func =
+      Function::Create(FT, Function::ExternalLinkage, funcname, module.get());
+    auto block = llvm::BasicBlock::Create(C, "entry", new_func);
+    llvm::IRBuilder<> builder(block);
+
+    auto func_context = unique_ptr<Context>(new Context(context));
+    pg.visit_dfs_filtered(entries_n, bind(&ModuleBuilder::process_lines, this, _1, _2, func_context.get(), &builder, new_func));
+
+    new_func->print(outs());
+    if (verifyFunction(*new_func, &outs())) {
+      cout << "Function failed verification: " << endl;
+      return;
+    }
+
+
+  }
+
+  bool process_lines(ParseGraph &pg, int n, Context *outer_context, llvm::IRBuilder<> *builder, llvm::Function *cur_func) {
+    auto context = unique_ptr<Context>(new Context(outer_context));
     auto rulename = pg.type(n);
     if (rulename == "line") {
       println("+exp bottom up start");
-      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, context->value_map, builder));
+      pg.visit_bottom_up(n, bind(&ModuleBuilder::process_exp, this, _1, _2, context.get(), builder));
       return false;
     }
     if (rulename == "branch") {
       int condition_n = pg.children(n)[0];
       print("cond text:", pg.text(condition_n));
-      pg.visit_bottom_up(condition_n, bind(&ModuleBuilder::process_exp, this, _1, _2, context->value_map, builder));
+      pg.visit_bottom_up(condition_n, bind(&ModuleBuilder::process_exp, this, _1, _2, context.get(), builder));
 
       auto cond_val = get<llvm::Value*>(value_vector[condition_n]);
       int branch_n = pg.get_one(n, set<string>{"if", "ifelse"});
@@ -148,7 +204,7 @@ struct ModuleBuilder {
 
         builder->SetInsertPoint(if_block);
 
-        pg.visit_dfs_filtered(branch_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
+        pg.visit_dfs_filtered(branch_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context.get(), builder, cur_func));
 
         if (builder->GetInsertBlock()->getTerminator() == nullptr)
           builder->CreateBr(continued);
@@ -167,7 +223,7 @@ struct ModuleBuilder {
 
         builder->SetInsertPoint(if_block);
 
-        pg.visit_dfs_filtered(if_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
+        pg.visit_dfs_filtered(if_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context.get(), builder, cur_func));
         if (builder->GetInsertBlock()->getTerminator() == nullptr) {
           print(">>had no terminator");
           builder->CreateBr(continued);
@@ -175,7 +231,7 @@ struct ModuleBuilder {
 
         builder->SetInsertPoint(else_block);
         print(">>>");
-        pg.visit_dfs_filtered(else_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context, builder, cur_func));
+        pg.visit_dfs_filtered(else_block_n, bind(&ModuleBuilder::process_lines, this, _1, _2, context.get(), builder, cur_func));
         if (else_block->getTerminator() == nullptr)
           builder->CreateBr(continued);
         print("<<<");
@@ -238,7 +294,7 @@ struct ModuleBuilder {
   }
 
 
-  void process_exp(ParseGraph &pg, int n, ValueMap &value_map, llvm::IRBuilder<> *builder) {
+  void process_exp(ParseGraph &pg, int n, Context *value_map, llvm::IRBuilder<> *builder) {
     auto rulename = pg.type(n);
     println("exp: ", rulename);
 
@@ -419,16 +475,6 @@ struct ModuleBuilder {
 
 };
 
-struct Function {
-
-  Function() {
-
-  }
-
-
-};
-
-
 int main(int argc, char **argv) {
   cout << "yopl" << endl;
   if (argc < 3) {
@@ -508,19 +554,20 @@ int main(int argc, char **argv) {
   tree_print(*parse_graph, 0, 0);
 
 
-  parse_graph->visit_dfs_filtered(0, [](ParseGraph &pg, int n) -> bool {
-    if (pg.type(n) == "functiondef") {
-        println("func", pg.text(pg.children(n)[1]));
-        pg.visit_dfs_filtered(n, [](ParseGraph &pg, int n) -> bool {
-          if (pg.type(n) == "name")
-            println(pg.text(n));
-          return true;
-        });
-        return false;
-    }
+  //Debug printing
+  // parse_graph->visit_dfs_filtered(0, [](ParseGraph &pg, int n) -> bool {
+  //   if (pg.type(n) == "functiondef") {
+  //       println("func", pg.text(pg.children(n)[1]));
+  //       pg.visit_dfs_filtered(n, [](ParseGraph &pg, int n) -> bool {
+  //         if (pg.type(n) == "name")
+  //           println(pg.text(n));
+  //         return true;
+  //       });
+  //       return false;
+  //   }
 
-    return true;
-  });
+  //   return true;
+  // });
 
   LLVMContext C;
   ModuleBuilder module_builder(C, "module");
