@@ -81,6 +81,7 @@ struct ModuleBuilder {
       pg.visit_dfs(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
 
       string name = pg.text(name_n);
+      
       llvm::Type *type = get<llvm::Type*>(value_vector[type_n]);
 
       names->push_back(name);
@@ -167,9 +168,10 @@ struct ModuleBuilder {
     auto func_context = unique_ptr<Context>(new Context(context));
     pg.visit_dfs_filtered(entries_n, bind(&ModuleBuilder::process_lines, this, _1, _2, func_context.get(), &builder, new_func));
 
+    print("printing new func:");
     new_func->print(outs());
     if (verifyFunction(*new_func, &outs())) {
-      cout << "Function failed verification: " << endl;
+      cout << "Defined Function failed verification: " << endl;
       return;
     }
 
@@ -251,39 +253,40 @@ struct ModuleBuilder {
     }
 
     if (rulename == "functiondef") {
-      int ins_n  = pg.children(n)[0];
-      int name_n = pg.children(n)[1];
-      int outs_n = pg.children(n)[2];
-      int body_n = pg.children(n)[3];
+      process_function(pg, n, context.get());
+      // int ins_n  = pg.children(n)[0];
+      // int name_n = pg.children(n)[1];
+      // int outs_n = pg.children(n)[2];
+      // int body_n = pg.children(n)[3];
       
-      auto func_name = pg.text(name_n);
+      // auto func_name = pg.text(name_n);
 
-      pg.visit_bottom_up(ins_n, bind(&ModuleBuilder::process_type, this, _1, _2 ));
-      std::vector<Type*> inputs;
-      for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
-          inputs.push_back(get<llvm::Type*>(value_vector[c]));
-      }
+      // pg.visit_bottom_up(ins_n, bind(&ModuleBuilder::process_type, this, _1, _2 ));
+      // std::vector<Type*> inputs;
+      // for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
+      //     inputs.push_back(get<llvm::Type*>(value_vector[c]));
+      // }
 
-      // Function *mul_add = mod->getFunction("mul_add");
-      auto retType = Type::getInt32Ty(C);
-      FunctionType *FT = FunctionType::get(retType, inputs, false);
-      Function *func =
-          Function::Create(FT, Function::ExternalLinkage, func_name, module.get());
-      // Function *mul_add = cast<Function>(mod->getOrInsertFunction("muladd", FT));
-      func->setCallingConv(CallingConv::C);
+      // // Function *mul_add = mod->getFunction("mul_add");
+      // auto retType = Type::getInt32Ty(C);
+      // FunctionType *FT = FunctionType::get(retType, inputs, false);
+      // Function *func =
+      //     Function::Create(FT, Function::ExternalLinkage, func_name, module.get());
+      // // Function *mul_add = cast<Function>(mod->getOrInsertFunction("muladd", FT));
+      // func->setCallingConv(CallingConv::C);
 
-      auto args = func->arg_begin();
-      for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
-        auto name_n = pg.get_one(c, "name");
-        if (name_n < 0)
-          continue;
-        Argument *a = &*args++;
-        a->setName(pg.text(name_n));
-      }
+      // auto args = func->arg_begin();
+      // for (auto c : pg.get_all(ins_n, "vardef")) { //also allow for others later (name only)
+      //   auto name_n = pg.get_one(c, "name");
+      //   if (name_n < 0)
+      //     continue;
+      //   Argument *a = &*args++;
+      //   a->setName(pg.text(name_n));
+      // }
 
-      BasicBlock *block = BasicBlock::Create(C, "entry", func, 0);
-      process_block(pg, body_n, builder);
-      print("> > function: ", func_name, " ", pg.text(ins_n), " > ", pg.text(outs_n));
+      // BasicBlock *block = BasicBlock::Create(C, "entry", func, 0);
+      // process_block(pg, body_n, builder);
+      // print("> > function: ", func_name, " ", pg.text(ins_n), " > ", pg.text(outs_n));
       return false;
     }
     return true;
@@ -467,7 +470,7 @@ struct ModuleBuilder {
 
   void propagate(ParseGraph &pg, int n) {
     if (pg.children(n).size() == 0) {
-      println("no children to propagate ", n, " type ", pg.type(n));
+      println("no children to propagate ", n, " type: ", pg.type(n), " text: ", pg.text(n));
       return;
     }
     value_vector[n] = value_vector[pg.children(n)[0]];
@@ -537,17 +540,17 @@ int main(int argc, char **argv) {
     return parse_graph->starts[a] < parse_graph->starts[b];
   });
 
-  //Actually process the info
-  ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
-    auto name = pg.type(n);
-    if (name == "classdef") {
-      cout << "found class: " << pg.text(pg.children(n)[0]) << endl;
-      return false;
-    }
-    return true;
-  });
+  // //Actually process the info, basic example printing class names
+  // ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
+  //   auto name = pg.type(n);
+  //   if (name == "classdef") {
+  //     cout << "found class: " << pg.text(pg.children(n)[0]) << endl;
+  //     return false;
+  //   }
+  //   return true;
+  // });
 
-  parse_graph->visit_dfs(0, cb);
+  // parse_graph->visit_dfs(0, cb);
   parse_graph->print_dot("compact.dot");
 
 
