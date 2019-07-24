@@ -76,12 +76,13 @@ struct ModuleBuilder {
 
   bool process_arguments(ParseGraph &pg, int n, vector<string> *names, vector<Type*> *types) {
     if (pg.type(n) == "vardef") {
-      int name_n = pg.children(n)[0];
-      int type_n = pg.children(n)[1];
-      pg.visit_dfs(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
+      int type_n = pg.children(n)[0]; 
+      int name_n = pg.children(n)[1];
+
+      pg.visit_bottom_up(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
+      print("vardef ", pg.text(type_n), pg.buffer.substr(pg.starts[name_n], 10));
 
       string name = pg.text(name_n);
-      
       llvm::Type *type = get<llvm::Type*>(value_vector[type_n]);
 
       names->push_back(name);
@@ -123,6 +124,8 @@ struct ModuleBuilder {
       return;      
     }
 
+    module->print(outs(), nullptr);
+
 
     std::string errStr;
     ExecutionEngine *EE =
@@ -154,7 +157,9 @@ struct ModuleBuilder {
 
     vector<string> names;
     vector<Type*> types;
+    print("Processing arguments");
     pg.visit_dfs_filtered(input_n, bind(&ModuleBuilder::process_arguments, this, _1, _2, &names, &types));
+    print("Done");
 
     auto funcname = pg.text(name_n);
 
@@ -170,12 +175,12 @@ struct ModuleBuilder {
 
     print("printing new func:");
     new_func->print(outs());
+    print("checking:");
+    
     if (verifyFunction(*new_func, &outs())) {
       cout << "Defined Function failed verification: " << endl;
-      return;
+      exit(1);
     }
-
-
   }
 
   bool process_lines(ParseGraph &pg, int n, Context *outer_context, llvm::IRBuilder<> *builder, llvm::Function *cur_func) {
@@ -443,6 +448,7 @@ struct ModuleBuilder {
 
   void process_type(ParseGraph &pg, int n) {
     auto rulename = pg.type(n);
+    print("Process type: ", pg.text(n), " ", pg.starts[n]);
     if (rulename == "basetype") {
       auto basetypen = pg.children(n)[0];
       auto basetypename = pg.text(basetypen);
@@ -460,6 +466,7 @@ struct ModuleBuilder {
           value_vector[n] = llvm::Type::getDoubleTy(C);
       }
     } else {
+      print("propagating");
       propagate(pg, n);
     }
   }

@@ -51,7 +51,7 @@ Function *makeFunc(LLVMContext &C, Module *mod) {
   y->setName("y");
   Argument *z = &*args++;
   z->setName("z");
-
+  
   BasicBlock *block = BasicBlock::Create(C, "entry", mul_add, 0);
   Value *tmp = BinaryOperator::CreateMul(x, y, "tmp", block);
   Value *result = BinaryOperator::CreateAdd(tmp, z, "result", block);
