@@ -36,6 +36,8 @@ typedef map<string, llvm::Value*> ValueMap;
 
 struct Context {
   map<string, llvm::Value*> value_map;
+  map<string, llvm::Type*>  type_map;
+  
   Context *parent = nullptr;
 
   Context(Context *parent_ = nullptr) : parent(parent_) {}
@@ -52,6 +54,11 @@ struct Context {
   void add_value(string name, Value *value) {
     value_map[name] = value;
   }
+
+  void add_type(string name, Type *type) {
+    type_map[name] = type;
+  }
+
 };
 
 struct ModuleBuilder {
@@ -258,7 +265,9 @@ struct ModuleBuilder {
     }
 
     if (rulename == "functiondef") {
-      process_function(pg, n, context.get());
+
+      // process_function(pg, n, context.get()); //initially we don't have global vars, so no context
+      process_function(pg, n, nullptr);
       // int ins_n  = pg.children(n)[0];
       // int name_n = pg.children(n)[1];
       // int outs_n = pg.children(n)[2];
@@ -452,19 +461,19 @@ struct ModuleBuilder {
     if (rulename == "basetype") {
       auto basetypen = pg.children(n)[0];
       auto basetypename = pg.text(basetypen);
-      bool is_ptr = pg.get_one(n, "noptr") == -1;
-      if (!is_ptr) {
-        if (basetypename == "i64")
-          value_vector[n] = llvm::Type::getInt64Ty(C);
-        if (basetypename == "i32")
-          value_vector[n] = llvm::Type::getInt32Ty(C);
-        if (basetypename == "i16")
-          value_vector[n] = llvm::Type::getInt16Ty(C);
-        if (basetypename == "f32")
-          value_vector[n] = llvm::Type::getFloatTy(C);
-        if (basetypename == "f64")
-          value_vector[n] = llvm::Type::getDoubleTy(C);
-      }
+      if (basetypename == "i64")
+        value_vector[n] = llvm::Type::getInt64Ty(C);
+      if (basetypename == "i32")
+        value_vector[n] = llvm::Type::getInt32Ty(C);
+      if (basetypename == "i16")
+        value_vector[n] = llvm::Type::getInt16Ty(C);
+      if (basetypename == "f32")
+        value_vector[n] = llvm::Type::getFloatTy(C);
+      if (basetypename == "f64")
+        value_vector[n] = llvm::Type::getDoubleTy(C);
+    } else if (rulename == "ptrof") {
+      auto child_n = pg.children(n)[0];
+      value_vector[n] = PointerType::get(get<Type*>(value_vector[child_n]), 0);
     } else {
       print("propagating");
       propagate(pg, n);
@@ -472,7 +481,15 @@ struct ModuleBuilder {
   }
 
   void process_classdef(ParseGraph &pg, int n) {
-    
+    int name_n = pg.children(n)[0];
+    int struct_n = pg.children(n)[1];
+    vector<Type*> types;
+    [] (ParseGraph &pg, int n) -> bool {
+      // bind(&ModuleBuilder::process_type, this, _1, _2);
+      // if (pg.type(n) == "vardef")     
+    };
+    // pg.visit_bottom_up(struct_n, );
+        
   }
 
   void propagate(ParseGraph &pg, int n) {

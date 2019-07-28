@@ -4,19 +4,18 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry classdef | functiondef | block | line | comment | branch | flow | continue | empty:''
+entry structdef | functiondef | block | line | comment | branch | flow | continue | empty:''
 block '\[\n' entries '\]' optcom '\n'
-classdef '\[' name '\]\n' clentries
+structdef '\[' name '\]\n' clentries
 #line stat | ret | alloc | inc | dec | vardef
 line stat | ret | alloc | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
+type basetype | classtype | ptrof
 basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
-type basetype | classtype
-classtype name ptr
-basetype basetypename ptr
-ptr '\*' | noptr
-noptr ''
+classtype name
+basetype basetypename
+ptrof '\*' type
 vardef type rws name
 ret 'ret' rws exp
 loadvar varname

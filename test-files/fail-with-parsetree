@@ -6,6 +6,11 @@ a < 3 ?
 	b = a * 2
 ]
 
+[Base]
+*i64 a
+f64 b
+
+
 i64 a -> somefunc -> i64 c
 	c = 2
 	ret c
