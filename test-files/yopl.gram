@@ -6,14 +6,14 @@ nocomment ''
 comment ws '#' comstr:'[^\n]*'
 entry structdef | functiondef | block | line | comment | branch | flow | continue | empty:''
 block '\[\n' entries '\]' optcom '\n'
-structdef '\[' name '\]\n' clentries
+structdef '\[' name '\]\n' structentries
 #line stat | ret | alloc | inc | dec | vardef
 line stat | ret | alloc | inc | dec
 alloc varname '\[' value '\]'
 name '[_[:alpha:]]+'
-type basetype | classtype | ptrof
+type basetype | structtype | ptrof
 basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
-classtype name
+structtype name
 basetype basetypename
 ptrof '\*' type
 vardef type rws name
@@ -22,8 +22,8 @@ loadvar varname
 loadvarptr varname
 rws '[ \t]+'
 ws '[ \t]*'
-clentries clentry | clentry clentries
-clentry vardef '\n'
+structentries structentry | structentry structentries
+structentry vardef '\n'
 functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
 items item | item ',' rws items
 item name | vardef

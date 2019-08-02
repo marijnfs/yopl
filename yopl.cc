@@ -18,6 +18,22 @@ using namespace std;
 using namespace llvm;
 using namespace std::placeholders;  // for _1, _2, _3...
 
+struct StructDefinition {
+  string name;
+  map<string, int> member_index;
+  vector<Type*> types;
+
+  Type* type;
+
+  void add_type(string member, Type *type) {
+    member_index[member] = types.size();
+    types.push_back(type);
+  }
+
+  void build_type() {
+    type = StructType::create(types, name);
+  }
+};
  
 void tree_print(ParseGraph &pg, int n, int depth) {
   for (int i(0); i < depth; ++i)
@@ -38,6 +54,8 @@ struct Context {
   map<string, llvm::Value*> value_map;
   map<string, llvm::Type*>  type_map;
   
+  map<string, StructDefinition*> struct_map;
+
   Context *parent = nullptr;
 
   Context(Context *parent_ = nullptr) : parent(parent_) {}
@@ -57,6 +75,10 @@ struct Context {
 
   void add_type(string name, Type *type) {
     type_map[name] = type;
+  }
+
+  void add_struct(string name, StructDefinition *struct_def) {
+    struct_map[name] = struct_def;
   }
 
 };
@@ -150,7 +172,7 @@ struct ModuleBuilder {
 
     typedef double MainFunc();
     MainFunc *f = (MainFunc*) EE->getFunctionAddress("main");
-    println(EE->getFunctionAddress("main"));
+    // println(EE->getFunctionAddress("main"));
     println("func: ptr", f);
     double result = f();
     println(result);
@@ -256,11 +278,12 @@ struct ModuleBuilder {
       return false;
     }
 
-    if (rulename == "classdef") {
+    if (rulename == "structdef") {
       int name_n = pg.children(n)[0];
       string class_name = pg.text(name_n);
       println("class ", class_name);
-      pg.visit_dfs(n, bind(&ModuleBuilder::process_classdef, this, _1, _2));
+      process_structdef(pg, n);
+      // pg.visit_dfs(n, bind(&ModuleBuilder::process_structdef, this, _1, _2));
       return false;
     }
 
@@ -480,16 +503,27 @@ struct ModuleBuilder {
     }
   }
 
-  void process_classdef(ParseGraph &pg, int n) {
+  void process_structdef(ParseGraph &pg, int n) {
+    StructDefinition struct_def;
+
     int name_n = pg.children(n)[0];
     int struct_n = pg.children(n)[1];
-    vector<Type*> types;
-    [] (ParseGraph &pg, int n) -> bool {
-      // bind(&ModuleBuilder::process_type, this, _1, _2);
-      // if (pg.type(n) == "vardef")     
+    struct_def.name = pg.text(name_n);
+    auto process_entries = [this, &struct_def] (ParseGraph &pg, int n) -> bool {
+      if (pg.type(n) == "vardef") {
+        auto type_n = pg.children(n)[0];
+        auto name_n = pg.children(n)[1];
+        pg.visit_bottom_up(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
+        string name = pg.text(name_n);
+        struct_def.add_type(name, get<llvm::Type*>(value_vector[type_n]));
+        // context.add_type(name, get<llvm::Type*>(value_vector[type_n]));
+        return false;
+      }
+      return true;
     };
-    // pg.visit_bottom_up(struct_n, );
-        
+    pg.visit_bottom_up(struct_n, process_entries);
+    struct_def.build_type();
+
   }
 
   void propagate(ParseGraph &pg, int n) {
@@ -556,8 +590,8 @@ int main(int argc, char **argv) {
   //squeeze recursive multi-items
   parse_graph->squeeze([](ParseGraph &pg, int n) -> bool {
     auto name = pg.type(n);
-     return name == "items" || name == "entries" || name == "clentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
-    // return name == "items" || name == "entries" || name == "clentries" || name == "varname" || name == "sources";
+     return name == "items" || name == "entries" || name == "structentries" || name == "nodes" || name == "flow" || name == "varname" || name == "sources";
+    // return name == "items" || name == "entries" || name == "structentries" || name == "varname" || name == "sources";
   });
 
   parse_graph->sort_children([&parse_graph](int a, int b) -> bool {
@@ -567,7 +601,7 @@ int main(int argc, char **argv) {
   // //Actually process the info, basic example printing class names
   // ParseGraph::BoolCallback cb([](ParseGraph &pg, int n) -> bool {
   //   auto name = pg.type(n);
-  //   if (name == "classdef") {
+  //   if (name == "structdef") {
   //     cout << "found class: " << pg.text(pg.children(n)[0]) << endl;
   //     return false;
   //   }
