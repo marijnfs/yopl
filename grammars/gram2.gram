@@ -1,0 +1,18 @@
+S line '\n' | line '\n' S
+ws '[ ]+'
+line ruledef | comment
+ruledef rulename ws options
+comment '#' comstr:'[^\n]*'
+options option | options ws '\|' ws option
+option ruleset
+ruleset rule ws ruleset | rule
+rule name | matchname | keyname
+keyname key ':' name | key ':' matchname
+key '[_[:alpha:]]+'
+rulename name
+matchname quote str:notquote quote | dquote str:notdquote dquote
+quote "\'"
+notquote "[^\']*"
+dquote '\"'
+notdquote '[^\"]*'
+name '[_[:alpha:]]+'

@@ -1,0 +1,73 @@
+S entries
+entries entryln | entryln entries
+entryln ws entry optcom '\n'
+optcom comment | nocomment
+nocomment ''
+comment ws '#' comstr:'[^\n]*'
+entry structdef | functiondef | block | line | comment | branch | flow | continue | empty:''
+block '\[\n' entries '\]' optcom '\n'
+structdef '\[' name '\]\n' structentries
+#line stat | ret | alloc | inc | dec | vardef
+line stat | ret | alloc | inc | dec
+alloc varname '\[' value '\]'
+name '[_[:alpha:]]+'
+type basetype | structtype | ptrof
+basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
+structtype name
+basetype basetypename
+ptrof '\*' type
+vardef type rws name
+ret 'ret' rws exp
+loadvar varname
+loadvarptr varname
+rws '[ \t]+'
+ws '[ \t]*'
+structentries structentry | structentry structentries
+structentry vardef '\n'
+functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
+items item | item ',' rws items
+item name | vardef
+varname indexname '\.' varname | indexname
+indexname name | int | '\(' value '\)'
+stat loadvarptr rws '=' rws value
+value flow | number | arraysize | exp
+number int | float
+int '[[:digit:]]+'
+float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
+arraysize varname '\[\]'
+exp number | binop | expb | inc | dec | loadvar
+inc '\+\+' loadvarptr
+dec '\-\-' loadvarptr
+neg '\-' exp
+binop plus | minus | times | divide
+plus exp rws '\+' rws exp
+minus exp rws '-' rws exp
+times expb rws '\*' rws expb
+divide expb rws '\/' rws expb
+expb '\(' exp '\)' | number | loadvar
+cmp less | more | eq | noteq
+less value rws '<' rws value
+more value rws '>' rws value
+lesseq value rws '<=' rws value
+moreeq value rws '>=' rws value
+eq value rws '==' rws value
+noteq value rws '!=' rws value
+branch boolexp rws '\?' '\n' branchblock
+branchblock if | ifelse
+if branchfinal
+ifelse branchopt branchfinal
+branchopt entries ws optjmp '\|' '\n'
+branchfinal entries ws optjmp '\]'
+optjmp jmp | nojmp
+boolexp and | or | cmp
+and boolexp rws '&' rws boolexp
+or boolexp rws '|' rws boolexp
+jmp '\^'
+nojmp ''
+flow sources | flow rws '\>' rws nodes
+nodes node | nodes rws node
+sources source | sources rws source
+source '\(' exp '\)' | number | node | loadvar | str
+node name | '\(' flow '\)'
+str '\"' content:'[^\"]*' '\"' | "\'" content:"[^\']*" "\'"
+continue '>' | continue '>'
