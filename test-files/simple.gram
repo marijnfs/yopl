@@ -1,3 +1,0 @@
-S 'a' B end
-end '[ \n\t]*'
-B 'b'

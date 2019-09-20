@@ -1,6 +1,0 @@
-S statement '\n'
-statement '\(' items '\)'
-items item | items ws item
-item statement | name
-name '[[:alpha:]]+'
-ws '[ ]+'
