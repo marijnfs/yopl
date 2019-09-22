@@ -20,16 +20,17 @@ vardef type rws name
 ret 'ret' rws exp
 loadvar varname
 loadvarptr varname
+loadvarptrcreate varname
 rws '[ \t]+'
 ws '[ \t]*'
 structentries structentry | structentry structentries
 structentry vardef '\n'
-functiondef items rws '->' rws name rws '->' rws items '\n' entries ']'
+functiondef in:items rws '->' rws name rws '->' rws out:items '\n' body:entries ']'
 items item | item ',' rws items
 item name | vardef
 varname indexname '\.' varname | indexname
 indexname name | int | '\(' value '\)'
-stat loadvarptr rws '=' rws value
+stat loadvarptrcreate rws '=' rws value
 value flow | number | arraysize | exp
 number int | float
 int '[[:digit:]]+'
@@ -52,7 +53,7 @@ lesseq value rws '<=' rws value
 moreeq value rws '>=' rws value
 eq value rws '==' rws value
 noteq value rws '!=' rws value
-branch boolexp rws '\?' '\n' branchblock
+branch condition:boolexp rws '\?' '\n' body:branchblock
 branchblock if | ifelse
 if branchfinal
 ifelse branchopt branchfinal

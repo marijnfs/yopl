@@ -1,7 +1,9 @@
+a > 3 ?
+  a = 3
+|
+    a = 4
+]
+  
 a = 5 * 3 + 1
 b = 7
 a = b + 4 / 8
-func bla(s){
-     ddf = 1
-}
-print("test")

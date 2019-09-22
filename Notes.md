@@ -23,3 +23,12 @@ generator would just for an iterable struct over which one can loop and do somet
 a struct that registers callbacks and then is run on a visit loop.
 Could have register_type_callback, register_default_callback, register_func_callback etc.
 
+
+process_module
+process_exp
+process_lines / process_block
+process_function
+process_type
+process_structdef
+process_arguments
+
