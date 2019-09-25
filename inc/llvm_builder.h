@@ -61,11 +61,11 @@ struct NodeBuilder : TypeCallback {
   }
 
   llvm::Value* llvm_value(int n) {
-    return get<llvm::Value*>(value_vector[n]);
+    return std::get<llvm::Value*>(value_vector[n]);
   }
 
   llvm::Type* llvm_type(int n) {
-    return get<llvm::Type*>(value_vector[n]);
+    return std::get<llvm::Type*>(value_vector[n]);
   }
 };
 
@@ -287,7 +287,7 @@ struct BlockBuilder : NodeBuilder {
     
     ExpBuilder exp_builder(*this);
     condition.bottom_up(exp_builder);
-    auto cond_val = get<llvm::Value*>(value_vector[condition.N]); //to search node?
+    auto cond_val = llvm_value(condition.N);
     
     auto continued = llvm::BasicBlock::Create(C, "continued", current_func.get());
     auto if_block = llvm::BasicBlock::Create(C, "if", current_func.get());

@@ -1,6 +1,8 @@
+#pragma once
+
 #include <iostream>
 
-void print() {
+inline void print() {
 }
 
 template <typename T> void print(const T& t) {
@@ -12,7 +14,7 @@ template <typename First, typename... Rest> void print(const First& first, const
     print(rest...); // recursive call using pack expansion syntax
 }
 
-void println() {
+inline void println() {
     std::cout << std::endl;
 }
 
