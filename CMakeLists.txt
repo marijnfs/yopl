@@ -25,4 +25,4 @@ find_library(LIBYAGLL_LIBRARY NAMES yagll HINTS ../yagll PATH_SUFFIXES build REQ
 include_directories(${LIBYAGLL} ${LIBYAGLL}/inc)
 
 add_executable(yopl ${SRC})
-target_link_libraries(yopl LLVM)
+target_link_libraries(yopl LLVM ${LIBYAGLL_LIBRARY} stdc++fs re2)
