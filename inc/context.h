@@ -3,7 +3,6 @@
 #include <map>
 #include <string>
 #include <iostream>
-#include "llvm_builder.h"
 
 using std::string;
 
@@ -11,7 +10,7 @@ struct Context {
   std::map<string, llvm::Value*> value_map;
   std::map<string, llvm::Type*>  type_map;
   
-  std::map<string, StructDefinition*> struct_map;
+  //std::map<string, StructDefinition*> struct_map;
 
   Context *parent = nullptr;
 
@@ -26,16 +25,16 @@ struct Context {
     return nullptr;
   }
 
-  void add_value(string name, Value *value) {
+  void add_value(string name, llvm::Value *value) {
     value_map[name] = value;
   }
 
-  void add_type(string name, Type *type) {
+  void add_type(string name, llvm::Type *type) {
     type_map[name] = type;
   }
 
-  void add_struct(string name, StructDefinition *struct_def) {
-    struct_map[name] = struct_def;
-  }
+  //void add_struct(string name, StructDefinition *struct_def) {
+  //  struct_map[name] = struct_def;
+  //}
 
 };
