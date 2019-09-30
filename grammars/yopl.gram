@@ -1,3 +1,4 @@
+module S
 S entries
 entries entryln | entryln entries
 entryln ws entry optcom '\n'

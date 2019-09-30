@@ -10,7 +10,7 @@ file(GLOB_RECURSE HDR
 )
 include_directories(inc)
 
-#find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG)
 #list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(HandleLLVMOptions) # load additional config
 #include(AddLLVM) # used to add our own modules
@@ -24,5 +24,5 @@ find_path(LIBYAGLL yagll.h HINTS ../yagll REQUIRED)
 find_library(LIBYAGLL_LIBRARY NAMES yagll HINTS ../yagll PATH_SUFFIXES build REQUIRED)
 include_directories(${LIBYAGLL} ${LIBYAGLL}/inc)
 
-add_executable(yopl ${SRC})
+add_executable(yopl ${SRC} bin/yopl.cc)
 target_link_libraries(yopl LLVM ${LIBYAGLL_LIBRARY} stdc++fs re2)
