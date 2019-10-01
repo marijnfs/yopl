@@ -148,6 +148,7 @@ struct ExpBuilder : NodeBuilder {
       print("varname: ", var_name);
       print("builder: ", builder);
       value_ptr = builder->CreateAlloca(llvm::Type::getDoubleTy(C), nullptr, var_name);
+      print("alloc: ", value_ptr);
       context->add_value(var_name, value_ptr);
     }
     value_vector[n] = value_ptr;
@@ -280,10 +281,10 @@ struct ExpBuilder : NodeBuilder {
 struct BlockBuilder : NodeBuilder {
   std::unique_ptr<Context> u_context;
 
-  BlockBuilder(NodeBuilder const &other, llvm::IRBuilder<> *builder_) :
-    //BlockBuilder(dynamic_cast<NodeBuilder const &>(other))
-    NodeBuilder(other)
+  BlockBuilder(NodeBuilder const &other, llvm::IRBuilder<> *builder_):
+    BlockBuilder(other)
   {
+    print("Block Builder constructor, builder set");
     builder = builder_;
   }
 
@@ -291,13 +292,14 @@ struct BlockBuilder : NodeBuilder {
     :  NodeBuilder(other, Mode::TOP_DOWN), 
        u_context(new Context(other.context)) 
   {
-    print("Block builder: ", context);
+    print("Block builder copy constructor, no builder set");
     context = u_context.get();
     register_callback("line", std::bind(&BlockBuilder::p_line, this, _1));
     register_callback("branch", std::bind(&BlockBuilder::p_branch, this, _1));
   }
 
   void p_line(int n) {
+    print("block irbuilder:", builder);
     SearchNode node{n, pg};
     ExpBuilder exp_builder(*this);
     node.visit(exp_builder);
@@ -309,10 +311,12 @@ struct BlockBuilder : NodeBuilder {
     auto condition = node.child("condition");
     auto body = node.child("body");
     
+    //generate evaluation of condition
     ExpBuilder exp_builder(*this);
     condition.visit(exp_builder);
     auto cond_val = llvm_value(condition.N);
-    
+    print("condition_val ", cond_val);
+    print("current func: ", current_func);
     auto continued = llvm::BasicBlock::Create(C, "continued", current_func);
     auto if_block = llvm::BasicBlock::Create(C, "if", current_func);
     
@@ -320,6 +324,7 @@ struct BlockBuilder : NodeBuilder {
     
     if (branchblock_node.type() == "if") {
       builder->CreateCondBr(cond_val, if_block, continued);
+      
       builder->SetInsertPoint(if_block);
       BlockBuilder block_builder(*this, builder);
       branchblock_node.child().visit(block_builder);
@@ -507,17 +512,19 @@ struct ModuleBuilder : NodeBuilder {
     
     std::vector<llvm::Type *> inputs;
     auto FT = llvm::FunctionType::get(llvm::Type::getDoubleTy(C), inputs, false);
-    auto current_func =
+    current_func =
       llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "main", module);
     current_func->setCallingConv(llvm::CallingConv::C);
     u_function.reset(current_func);
 
+    //Create the function block and traverse the parsetree
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     llvm::IRBuilder<> block_ir_builder(block);
 
-    //BlockBuilder block_builder(*this, &block_ir_builder);
-    //module_node.visit(block_builder);
-
+    print("main irbuilder:", &block_ir_builder);
+    BlockBuilder block_builder(*this, &block_ir_builder);
+    module_node.visit(block_builder);
+    
     //print created main func
     current_func->print(llvm::outs());
     print("func: ", current_func);
