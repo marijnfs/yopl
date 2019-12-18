@@ -5,16 +5,14 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry structdef | functiondef | block | line | comment | branch | flow | continue | empty:''
+entry structdef | functiondef | block | line | comment | branch | continue | empty:''
 block '\[\n' entries '\]' optcom '\n'
 structdef '\[' name '\]\n' structentries
-#line stat | ret | alloc | inc | dec | vardef
-line stat | ret | alloc | inc | dec
+line stat | ret | bloe
+bloe alloc | inc | dec | vardef
 alloc varname '\[' value '\]'
 name '[_[:alpha:]][_[:alnum:]]*'
-type basetype | other
-other ptrof
-#structtype | ptrof
+type basetype | structtype | ptrof
 basetypename 'i64' | 'i32' | 'i16' | 'f64' | 'f32' | 'c'
 structtype name
 basetype basetypename
@@ -34,7 +32,7 @@ item name | vardef
 varname indexname '\.' varname | indexname
 indexname name | int | '\(' value '\)'
 stat loadvarptrcreate rws '=' rws value
-value flow | number | arraysize | exp
+value exp | number | arraysize
 number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'

@@ -36,9 +36,10 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  /*
   for (auto file : fs::directory_iterator(input_path.parent_path())) {
     cout << file << endl;
-  }
+  }*/
 
   ifstream gram_file(gram_path);
   ifstream input_file(input_path);

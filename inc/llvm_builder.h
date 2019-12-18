@@ -223,6 +223,7 @@ struct ExpBuilder : NodeBuilder {
 
   void p_more(int n) {
     SearchNode node{n, pg};
+    print(node.text());
     auto c0 = node.child(0).N;
     auto c1 = node.child(1).N;
     value_vector[n] = builder->CreateFCmpUGT(llvm_value(c0), llvm_value(c1));
@@ -369,8 +370,6 @@ struct TypeBuilder : NodeBuilder {
 
   void p_basetypename(int n) {
     SearchNode node{n, pg};
-    print("basetype name ", node.text());
-
     auto type_name = node.text();
     
     if (type_name == "i64")
@@ -465,6 +464,10 @@ struct FunctionBuilder : NodeBuilder {
     current_func->setCallingConv(llvm::CallingConv::C);
     
     //grab the arguments, add them to the context
+    auto block = llvm::BasicBlock::Create(C, "entry", current_func);
+    u_builder.reset(new llvm::IRBuilder<>(block));
+    builder = u_builder.get();
+
     {
       int n(0);
       for (auto &&arg : current_func->args()) {
@@ -479,9 +482,6 @@ struct FunctionBuilder : NodeBuilder {
       }
     }
 
-    auto block = llvm::BasicBlock::Create(C, "entry", current_func);
-    u_builder.reset(new llvm::IRBuilder<>(block));
-    builder = u_builder.get();
 
     { //kind of abuse of args builder, to grab output types
       ArgsBuilder out_args_builder(*this);
