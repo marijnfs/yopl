@@ -17,7 +17,6 @@ struct Context {
   Context(Context *parent_ = nullptr) : parent(parent_) {}
 
   llvm::Value* get_value(string name) {
-    println("getval: ", name);
     if (value_map.count(name))
       return value_map[name];
     if (parent)

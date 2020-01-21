@@ -77,8 +77,6 @@ struct ExpBuilder : NodeBuilder {
   ExpBuilder(NodeBuilder &other) :
     NodeBuilder(other, Mode::BOTTOM_UP)
   {
-    print("Building exp builder, c ptr: ", context);
-
     register_callback("number", std::bind(&ExpBuilder::p_number, this, _1));
     register_callback("times", std::bind(&ExpBuilder::p_times, this, _1));
     register_callback("divide", std::bind(&ExpBuilder::p_divide, this, _1));
@@ -148,10 +146,7 @@ struct ExpBuilder : NodeBuilder {
     auto var_name = node.text();
     auto value_ptr = context->get_value(var_name);
     if (!value_ptr) {
-      print("varname: ", var_name);
-      print("builder: ", builder);
       value_ptr = builder->CreateAlloca(llvm::Type::getDoubleTy(C), nullptr, var_name);
-      print("alloc: ", value_ptr);
       context->add_value(var_name, value_ptr);
     }
     value_vector[n] = value_ptr;
@@ -170,7 +165,6 @@ struct ExpBuilder : NodeBuilder {
 
   void p_loadvar(int n) {
     SearchNode node{n, pg};
-    print("loadvar: ", node.text());
 
     auto var_name = node.child().text();
     auto value_ptr = context->get_value(var_name);
@@ -224,7 +218,6 @@ struct ExpBuilder : NodeBuilder {
 
   void p_more(int n) {
     SearchNode node{n, pg};
-    print(node.text());
     auto c0 = node.child(0).N;
     auto c1 = node.child(1).N;
     value_vector[n] = builder->CreateFCmpUGT(llvm_value(c0), llvm_value(c1));
@@ -303,7 +296,6 @@ struct BlockBuilder : NodeBuilder {
   BlockBuilder(NodeBuilder const &other, llvm::IRBuilder<> *builder_):
     BlockBuilder(other)
   {
-    print("Block Builder constructor, builder set");
     builder = builder_;
   }
 
@@ -311,7 +303,6 @@ struct BlockBuilder : NodeBuilder {
     :  NodeBuilder(other, Mode::TOP_DOWN), 
        u_context(new Context(other.context)) 
   {
-    print("Block builder copy constructor, no builder set");
     context = u_context.get();
     register_callback("line", std::bind(&BlockBuilder::p_line, this, _1));
     register_callback("branch", std::bind(&BlockBuilder::p_branch, this, _1));
@@ -319,7 +310,6 @@ struct BlockBuilder : NodeBuilder {
   }
 
   void p_line(int n) {
-    print("block irbuilder:", builder);
     SearchNode node{n, pg};
     ExpBuilder exp_builder(*this);
     node.visit(exp_builder);
@@ -337,8 +327,7 @@ struct BlockBuilder : NodeBuilder {
     ExpBuilder exp_builder(*this);
     condition.visit(exp_builder);
     auto cond_val = llvm_value(condition.N);
-    print("condition_val ", cond_val);
-    print("current func: ", current_func);
+    
     auto continued = llvm::BasicBlock::Create(C, "continued", current_func);
     auto if_block = llvm::BasicBlock::Create(C, "if", current_func);
     
@@ -400,7 +389,6 @@ struct TypeBuilder : NodeBuilder {
       throw std::runtime_error("Type not implemented");
   }
   void p_ptrof(int n) {
-    print("ptr of");
     SearchNode node{n, pg};
     value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
   }
@@ -417,7 +405,6 @@ struct ArgsBuilder : NodeBuilder {
   std::vector<string> names;
   
   ArgsBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::TOP_DOWN) {
-    print("Args Builder");
     register_callback("vardef", std::bind(&ArgsBuilder::p_vardef, this, _1));
   }
 
@@ -427,8 +414,6 @@ struct ArgsBuilder : NodeBuilder {
     auto type_node = node.child("type");
     TypeBuilder builder(*this);
     type_node.visit(builder);
-    
-    print("[", node.text(), "]", type_node.text());
     
     auto name = node.child("name").text();
     auto type = llvm_type(type_node.N);
@@ -454,7 +439,6 @@ struct FunctionBuilder : NodeBuilder {
   }
 
   void p_function(int n) {
-    print("Function Builder");
 
     //prepare nodes
     SearchNode node{n, pg};
@@ -493,7 +477,6 @@ struct FunctionBuilder : NodeBuilder {
       for (auto &&arg : current_func->args()) {
         auto name = args_builder.names[n];
         arg.setName(name);
-        print("adding arg", name);
         //put argument on heap to make things easy, hope for llvmpasses to optimize it out
         auto storedArg = builder->CreateAlloca(arg.getType(), nullptr, name);
         builder->CreateStore(&arg, storedArg);
@@ -502,13 +485,8 @@ struct FunctionBuilder : NodeBuilder {
       }
     }
 
-
     BlockBuilder block_builder(*this);
     body.visit(block_builder);
-
-    print("printing new func:");
-    current_func->print(llvm::outs());
-    print("checking:");
     
     if (verifyFunction(*current_func, &llvm::outs())) {
       print("Defined Function failed verification.");
