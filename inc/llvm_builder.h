@@ -100,6 +100,7 @@ struct ExpBuilder : NodeBuilder {
     register_callback("neq", std::bind(&ExpBuilder::p_neq, this, _1));
     register_callback("and", std::bind(&ExpBuilder::p_and, this, _1));
     register_callback("or", std::bind(&ExpBuilder::p_or, this, _1));
+    register_callback("call", std::bind(&ExpBuilder::p_call, this, _1));
   }
   
   void p_number(int n) {
@@ -271,6 +272,19 @@ struct ExpBuilder : NodeBuilder {
     value_vector[n] = builder->CreateOr(llvm_value(c0), llvm_value(c1));
   }
 
+  void p_call(int n) {
+    SearchNode node{n, pg};
+    auto funcname = node.child("funcname").text();
+    auto funcarg_n = node.child("funcarg").N;
+
+    auto function = context->get_value(funcname);
+
+    std::vector<llvm::Value*> values;
+    values.push_back(llvm_value(funcarg_n));
+
+    value_vector[n] = builder->CreateCall(function, values);
+  }
+
   void run_default(int n) {
     //propagate
     
@@ -429,6 +443,9 @@ struct ArgsBuilder : NodeBuilder {
 };
 
 struct FunctionBuilder : NodeBuilder {
+  std::unique_ptr<llvm::Function> u_function;
+  std::string name;
+
   std::unique_ptr<Context> u_context;
   std::unique_ptr<llvm::IRBuilder<>> u_builder;
 
@@ -445,7 +462,7 @@ struct FunctionBuilder : NodeBuilder {
     auto body = node.child("body");
 
     //get fuction name
-    auto func_name = node.child("name").text();
+    name = node.child("name").text();
 
     //create new context
     u_context.reset(new Context(context));
@@ -460,14 +477,17 @@ struct FunctionBuilder : NodeBuilder {
 
     //create the function
     current_func =
-      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, func_name, module);
+      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, name, module);
     current_func->setCallingConv(llvm::CallingConv::C);
+
+    //Set the unique ptr
+    u_function.reset(current_func); 
     
-    //grab the arguments, add them to the context
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     u_builder.reset(new llvm::IRBuilder<>(block));
     builder = u_builder.get();
 
+    //grab the arguments, add them to the context
     {
       int n(0);
       for (auto &&arg : current_func->args()) {
@@ -483,18 +503,6 @@ struct FunctionBuilder : NodeBuilder {
     }
 
 
-    { //kind of abuse of args builder, to grab output types
-      ArgsBuilder out_args_builder(*this);
-      node.child("out").visit(args_builder);
-      for (int n(0); n < out_args_builder.size(); ++n) {
-        auto name = out_args_builder.names[n];
-        auto type = out_args_builder.types[n];
-        auto new_alloc = builder->CreateAlloca(type, nullptr, name);
-        print("adding out: ", name);
-        context->add_value(name, new_alloc);
-      }
-    }
- 
     BlockBuilder block_builder(*this);
     body.visit(block_builder);
 
@@ -566,7 +574,7 @@ struct ModuleBuilder : NodeBuilder {
     std::vector<llvm::Type *> inputs;
     auto FT = llvm::FunctionType::get(llvm::Type::getDoubleTy(C), inputs, false);
     current_func =
-      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "main", module);
+      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "modulemain", module);
     current_func->setCallingConv(llvm::CallingConv::C);
     //u_function.reset(current_func);
 
@@ -574,12 +582,10 @@ struct ModuleBuilder : NodeBuilder {
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     llvm::IRBuilder<> block_ir_builder(block);
 
-    print("main irbuilder:", &block_ir_builder);
     BlockBuilder block_builder(*this, &block_ir_builder);
     module_node.visit(block_builder);
     
     //print created main func
-    //current_func->print(llvm::outs());
     if (verifyFunction(*current_func, &llvm::outs())) {
       print("Function failed verification: ");
       return;
@@ -590,28 +596,5 @@ struct ModuleBuilder : NodeBuilder {
       return;      
     }
 
-    //print whole module
-    //module->print(llvm::outs(), nullptr);
-    
-
-    //create the execution engine
-    std::string errStr;
-    auto EE =
-        llvm::EngineBuilder(std::move(u_module)).setErrorStr(&errStr).create();
-
-    if (!EE) {
-      llvm::errs() << ": Failed to construct ExecutionEngine: " << errStr
-             << "\n";
-      return;
-    }
-
-    //compile    
-    EE->finalizeObject();
-    //get pointer to main func, and call it
-    /*typedef double MainFunc();
-      MainFunc *f = (MainFunc*) EE->getFunctionAddress("main");
-    println("func: ptr", f);
-    double result = f();
-    println(result);*/
   }
 };

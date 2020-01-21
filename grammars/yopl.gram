@@ -5,7 +5,7 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry structdef | functiondef | block | line | comment | branch | continue | empty:''
+entry structdef | functiondef | block | line | comment | branch | continue | empty:'' | call
 block '\[\n' entries '\]' optcom '\n'
 structdef '\[' name '\]\n' structentries
 line stat | ret | bloe
@@ -33,11 +33,13 @@ varname indexname '\.' varname | indexname
 indexname name | int | '\(' value '\)'
 stat loadvarptrcreate rws '=' rws value
 value exp | number | arraysize
+values value | values rws value
 number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp number | binop | expb | inc | dec | loadvar
+exp number | binop | expb | inc | dec | loadvar | call
+call funcname:name '\(' funcarg:values '\)'
 inc '\+\+' loadvarptr
 dec '\-\-' loadvarptr
 neg '\-' exp

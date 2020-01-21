@@ -14,4 +14,7 @@ in1 f64, in2 f64 -> bla -> out f64
    ret out
 ]
 
+
+bla(a)
+
 ret 34

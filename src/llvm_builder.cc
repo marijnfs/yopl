@@ -7,4 +7,7 @@ void BlockBuilder::p_function(int n) {
   SearchNode node{n, pg};
   FunctionBuilder function_builder(*this);
   node.visit(function_builder);
+
+  u_context->add_value(function_builder.name, function_builder.u_function.release());
 }
+
