@@ -89,8 +89,39 @@ int main(int argc, char **argv) {
   NodeBuilder base_builder(*parse_graph, C, value_vector);
   
   ModuleBuilder module_builder(base_builder);
-  print("Running Modulebuilder");
+  print("Running Module Builder");
   parse_graph->visit(module_builder);
-  module_builder.module->print(llvm::outs(), nullptr);
+  auto module = std::move(module_builder.u_module);
+
+  module->print(llvm::outs(), nullptr);
+
+  if (verifyModule(*module, &outs())) {
+    cout << "failed verification" << endl;
+    return 1;
+  } else {
+    cout << "Module verified" << endl;
+  }
+
+  // Set up Jit
+  std::string error_string;
+  llvm::ExecutionEngine *EE =
+    llvm::EngineBuilder(std::move(module)).setErrorStr(&error_string).create();
+
+  if (!EE) {
+    errs() << argv[0] << ": Failed to construct ExecutionEngine: " << error_string
+           << "\n";
+    return 1;
+  }
+
+  EE->finalizeObject();
+
+
+  typedef double MainFuncType();
+  MainFuncType *fmain = (MainFuncType *)EE->getFunctionAddress("modulemain");
+  cout << "func ptr: " << fmain << endl;
+  double result = (*fmain)();
+
+  cout << "Result: " << result << "\n";
+
   print("Done");
 }

@@ -77,8 +77,6 @@ struct ExpBuilder : NodeBuilder {
   ExpBuilder(NodeBuilder &other) :
     NodeBuilder(other, Mode::BOTTOM_UP)
   {
-    print("Building exp builder, c ptr: ", context);
-
     register_callback("number", std::bind(&ExpBuilder::p_number, this, _1));
     register_callback("times", std::bind(&ExpBuilder::p_times, this, _1));
     register_callback("divide", std::bind(&ExpBuilder::p_divide, this, _1));
@@ -100,6 +98,7 @@ struct ExpBuilder : NodeBuilder {
     register_callback("neq", std::bind(&ExpBuilder::p_neq, this, _1));
     register_callback("and", std::bind(&ExpBuilder::p_and, this, _1));
     register_callback("or", std::bind(&ExpBuilder::p_or, this, _1));
+    register_callback("call", std::bind(&ExpBuilder::p_call, this, _1));
   }
   
   void p_number(int n) {
@@ -147,10 +146,7 @@ struct ExpBuilder : NodeBuilder {
     auto var_name = node.text();
     auto value_ptr = context->get_value(var_name);
     if (!value_ptr) {
-      print("varname: ", var_name);
-      print("builder: ", builder);
       value_ptr = builder->CreateAlloca(llvm::Type::getDoubleTy(C), nullptr, var_name);
-      print("alloc: ", value_ptr);
       context->add_value(var_name, value_ptr);
     }
     value_vector[n] = value_ptr;
@@ -169,7 +165,6 @@ struct ExpBuilder : NodeBuilder {
 
   void p_loadvar(int n) {
     SearchNode node{n, pg};
-    print("loadvar: ", node.text());
 
     auto var_name = node.child().text();
     auto value_ptr = context->get_value(var_name);
@@ -223,7 +218,6 @@ struct ExpBuilder : NodeBuilder {
 
   void p_more(int n) {
     SearchNode node{n, pg};
-    print(node.text());
     auto c0 = node.child(0).N;
     auto c1 = node.child(1).N;
     value_vector[n] = builder->CreateFCmpUGT(llvm_value(c0), llvm_value(c1));
@@ -271,6 +265,19 @@ struct ExpBuilder : NodeBuilder {
     value_vector[n] = builder->CreateOr(llvm_value(c0), llvm_value(c1));
   }
 
+  void p_call(int n) {
+    SearchNode node{n, pg};
+    auto funcname = node.child("funcname").text();
+    auto funcarg_n = node.child("funcarg").N;
+
+    auto function = context->get_value(funcname);
+
+    std::vector<llvm::Value*> values;
+    values.push_back(llvm_value(funcarg_n));
+
+    value_vector[n] = builder->CreateCall(function, values);
+  }
+
   void run_default(int n) {
     //propagate
     
@@ -289,7 +296,6 @@ struct BlockBuilder : NodeBuilder {
   BlockBuilder(NodeBuilder const &other, llvm::IRBuilder<> *builder_):
     BlockBuilder(other)
   {
-    print("Block Builder constructor, builder set");
     builder = builder_;
   }
 
@@ -297,7 +303,6 @@ struct BlockBuilder : NodeBuilder {
     :  NodeBuilder(other, Mode::TOP_DOWN), 
        u_context(new Context(other.context)) 
   {
-    print("Block builder copy constructor, no builder set");
     context = u_context.get();
     register_callback("line", std::bind(&BlockBuilder::p_line, this, _1));
     register_callback("branch", std::bind(&BlockBuilder::p_branch, this, _1));
@@ -305,7 +310,6 @@ struct BlockBuilder : NodeBuilder {
   }
 
   void p_line(int n) {
-    print("block irbuilder:", builder);
     SearchNode node{n, pg};
     ExpBuilder exp_builder(*this);
     node.visit(exp_builder);
@@ -323,8 +327,7 @@ struct BlockBuilder : NodeBuilder {
     ExpBuilder exp_builder(*this);
     condition.visit(exp_builder);
     auto cond_val = llvm_value(condition.N);
-    print("condition_val ", cond_val);
-    print("current func: ", current_func);
+    
     auto continued = llvm::BasicBlock::Create(C, "continued", current_func);
     auto if_block = llvm::BasicBlock::Create(C, "if", current_func);
     
@@ -386,7 +389,6 @@ struct TypeBuilder : NodeBuilder {
       throw std::runtime_error("Type not implemented");
   }
   void p_ptrof(int n) {
-    print("ptr of");
     SearchNode node{n, pg};
     value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
   }
@@ -403,7 +405,6 @@ struct ArgsBuilder : NodeBuilder {
   std::vector<string> names;
   
   ArgsBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::TOP_DOWN) {
-    print("Args Builder");
     register_callback("vardef", std::bind(&ArgsBuilder::p_vardef, this, _1));
   }
 
@@ -413,8 +414,6 @@ struct ArgsBuilder : NodeBuilder {
     auto type_node = node.child("type");
     TypeBuilder builder(*this);
     type_node.visit(builder);
-    
-    print("[", node.text(), "]", type_node.text());
     
     auto name = node.child("name").text();
     auto type = llvm_type(type_node.N);
@@ -429,6 +428,9 @@ struct ArgsBuilder : NodeBuilder {
 };
 
 struct FunctionBuilder : NodeBuilder {
+  std::unique_ptr<llvm::Function> u_function;
+  std::string name;
+
   std::unique_ptr<Context> u_context;
   std::unique_ptr<llvm::IRBuilder<>> u_builder;
 
@@ -437,7 +439,6 @@ struct FunctionBuilder : NodeBuilder {
   }
 
   void p_function(int n) {
-    print("Function Builder");
 
     //prepare nodes
     SearchNode node{n, pg};
@@ -445,7 +446,7 @@ struct FunctionBuilder : NodeBuilder {
     auto body = node.child("body");
 
     //get fuction name
-    auto func_name = node.child("name").text();
+    name = node.child("name").text();
 
     //create new context
     u_context.reset(new Context(context));
@@ -460,20 +461,22 @@ struct FunctionBuilder : NodeBuilder {
 
     //create the function
     current_func =
-      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, func_name, module);
+      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, name, module);
     current_func->setCallingConv(llvm::CallingConv::C);
+
+    //Set the unique ptr
+    u_function.reset(current_func); 
     
-    //grab the arguments, add them to the context
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     u_builder.reset(new llvm::IRBuilder<>(block));
     builder = u_builder.get();
 
+    //grab the arguments, add them to the context
     {
       int n(0);
       for (auto &&arg : current_func->args()) {
         auto name = args_builder.names[n];
         arg.setName(name);
-        print("adding arg", name);
         //put argument on heap to make things easy, hope for llvmpasses to optimize it out
         auto storedArg = builder->CreateAlloca(arg.getType(), nullptr, name);
         builder->CreateStore(&arg, storedArg);
@@ -482,25 +485,8 @@ struct FunctionBuilder : NodeBuilder {
       }
     }
 
-
-    { //kind of abuse of args builder, to grab output types
-      ArgsBuilder out_args_builder(*this);
-      node.child("out").visit(args_builder);
-      for (int n(0); n < out_args_builder.size(); ++n) {
-        auto name = out_args_builder.names[n];
-        auto type = out_args_builder.types[n];
-        auto new_alloc = builder->CreateAlloca(type, nullptr, name);
-        print("adding out: ", name);
-        context->add_value(name, new_alloc);
-      }
-    }
- 
     BlockBuilder block_builder(*this);
     body.visit(block_builder);
-
-    print("printing new func:");
-    current_func->print(llvm::outs());
-    print("checking:");
     
     if (verifyFunction(*current_func, &llvm::outs())) {
       print("Defined Function failed verification.");
@@ -566,7 +552,7 @@ struct ModuleBuilder : NodeBuilder {
     std::vector<llvm::Type *> inputs;
     auto FT = llvm::FunctionType::get(llvm::Type::getDoubleTy(C), inputs, false);
     current_func =
-      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "main", module);
+      llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "modulemain", module);
     current_func->setCallingConv(llvm::CallingConv::C);
     //u_function.reset(current_func);
 
@@ -574,12 +560,10 @@ struct ModuleBuilder : NodeBuilder {
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     llvm::IRBuilder<> block_ir_builder(block);
 
-    print("main irbuilder:", &block_ir_builder);
     BlockBuilder block_builder(*this, &block_ir_builder);
     module_node.visit(block_builder);
     
     //print created main func
-    //current_func->print(llvm::outs());
     if (verifyFunction(*current_func, &llvm::outs())) {
       print("Function failed verification: ");
       return;
@@ -590,28 +574,5 @@ struct ModuleBuilder : NodeBuilder {
       return;      
     }
 
-    //print whole module
-    //module->print(llvm::outs(), nullptr);
-    
-
-    //create the execution engine
-    std::string errStr;
-    auto EE =
-        llvm::EngineBuilder(std::move(u_module)).setErrorStr(&errStr).create();
-
-    if (!EE) {
-      llvm::errs() << ": Failed to construct ExecutionEngine: " << errStr
-             << "\n";
-      return;
-    }
-
-    //compile    
-    EE->finalizeObject();
-    //get pointer to main func, and call it
-    /*typedef double MainFunc();
-      MainFunc *f = (MainFunc*) EE->getFunctionAddress("main");
-    println("func: ptr", f);
-    double result = f();
-    println(result);*/
   }
 };
