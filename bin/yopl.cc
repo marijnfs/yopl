@@ -47,8 +47,10 @@ int main(int argc, char **argv) {
   Parser parser(gram_file);
   auto parse_graph = parser.parse(input_file);
   
-  if (!parse_graph)
+  if (!parse_graph) {
+     cerr << "failed to create parsegraph" << endl;
     return 0;
+  }
 
   //filter empty lines and empty comments
   cout << "nodes: " << parse_graph->size() << endl;
@@ -104,7 +106,7 @@ int main(int argc, char **argv) {
 
   // Set up Jit
   std::string error_string;
-  llvm::ExecutionEngine *EE =
+  auto EE =
     llvm::EngineBuilder(std::move(module)).setErrorStr(&error_string).create();
 
   if (!EE) {
@@ -113,15 +115,27 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  EE->finalizeObject();
-
-
+  //EE->finalizeObject();
+  cout << EE->getFunctionAddress("modulemain") << endl;
   typedef double MainFuncType();
-  MainFuncType *fmain = (MainFuncType *)EE->getFunctionAddress("modulemain");
+  MainFuncType *fmain = (MainFuncType *)(EE->getFunctionAddress("modulemain"));
+  auto fmain2 = EE->FindFunctionNamed("modulemain");
+  cout << "calling conv: " <<  fmain2->getCallingConv() << endl;
+  std::vector<llvm::GenericValue> arguments(1);
+  arguments[0].IntVal = llvm::APInt(32,2);
+  {
+      auto result = EE->runFunction(fmain2, arguments);
+      cout << result.DoubleVal << endl;
+  }
+  auto fmain3 = EE->getPointerToNamedFunction("modulemain");
+
   cout << "func ptr: " << fmain << endl;
-  double result = (*fmain)();
-
-  cout << "Result: " << result << "\n";
-
+  cout << "func ptr: " << fmain2 << endl;
+  cout << "func ptr: " << fmain3 << endl;
+  {
+      double result = (*fmain)();
+      
+      cout << "Result: " << result << "\n";
+  }
   print("Done");
 }
