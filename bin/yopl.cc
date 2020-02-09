@@ -125,17 +125,13 @@ int main(int argc, char **argv) {
   arguments[0].IntVal = llvm::APInt(32,2);
   {
       auto result = EE->runFunction(fmain2, arguments);
-      cout << result.DoubleVal << endl;
+      print("Result of main(2) ", result.DoubleVal);
   }
   auto fmain3 = EE->getPointerToNamedFunction("modulemain");
 
-  cout << "func ptr: " << fmain << endl;
-  cout << "func ptr: " << fmain2 << endl;
-  cout << "func ptr: " << fmain3 << endl;
-  {
-      double result = (*fmain)();
+  //{
+    //  double result = (*fmain)();
       
-      cout << "Result: " << result << "\n";
-  }
-  print("Done");
+      //cout << "Result: " << result << "\n";
+  //}
 }

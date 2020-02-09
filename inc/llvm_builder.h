@@ -268,14 +268,19 @@ struct ExpBuilder : NodeBuilder {
   void p_call(int n) {
     SearchNode node{n, pg};
     auto funcname = node.child("funcname").text();
-    auto funcarg_n = node.child("funcarg").N;
-
     auto function = context->get_value(funcname);
+    if (!function)
+        throw std::runtime_error("Function not defined");
+    auto funcarg = node.child("funcarg");
 
-    std::vector<llvm::Value*> values;
-    values.push_back(llvm_value(funcarg_n));
-
-    value_vector[n] = builder->CreateCall(function, values);
+    std::vector<llvm::Value*> argument_values;
+    
+    for (auto child : funcarg.get_all("value")) {
+        print("Child: ", child.text());
+        argument_values.emplace_back(llvm_value(child.N));
+    }
+    
+    value_vector[n] = builder->CreateCall(function, argument_values);
   }
 
   void run_default(int n) {
