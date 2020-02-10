@@ -323,6 +323,107 @@ struct ExpBuilder : NodeBuilder {
   }
 };
 
+struct TypeBuilder : NodeBuilder {
+  TypeBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::BOTTOM_UP) {
+   register_callback("basetypename", std::bind(&TypeBuilder::p_basetypename, this, _1));
+    register_callback("ptrof", std::bind(&TypeBuilder::p_ptrof, this, _1));
+  }
+
+  void p_basetypename(int n) {
+    SearchNode node{n, pg};
+    auto type_name = node.text();
+    
+    if (type_name == "i64")
+      value_vector[n] = llvm::Type::getInt64Ty(C);
+    else if (type_name == "i32")
+      value_vector[n] = llvm::Type::getInt32Ty(C);
+    else if (type_name == "i16")
+      value_vector[n] = llvm::Type::getInt16Ty(C);
+    else if (type_name == "f64")
+      value_vector[n] = llvm::Type::getDoubleTy(C);
+    else if (type_name == "f32")
+      value_vector[n] = llvm::Type::getFloatTy(C);
+    else
+      throw std::runtime_error("Type not implemented");
+  }
+  void p_ptrof(int n) {
+    SearchNode node{n, pg};
+    value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
+  }
+  
+  void run_default(int n) {
+    SearchNode node{n, pg};
+    value_vector[n] = value_vector[node.child().N];
+  }
+};
+
+struct ArgsBuilder : NodeBuilder {
+  std::vector<llvm::Type*> types;
+  std::vector<string> names;
+  
+  ArgsBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::TOP_DOWN) {
+    register_callback("vardef", std::bind(&ArgsBuilder::p_vardef, this, _1));
+  }
+
+  void p_vardef(int n) {
+    SearchNode node{n, pg};
+    
+    auto type_node = node.child("type");
+    TypeBuilder builder(*this);
+    type_node.visit(builder);
+    
+    auto name = node.child("name").text();
+    auto type = llvm_type(type_node.N);
+
+    names.emplace_back(name);
+    types.emplace_back(type);
+  }
+
+  int size() {
+    return names.size();
+  }
+};
+
+struct StructBuilder : NodeBuilder {
+    std::string name;
+    std::vector<llvm::Type*> variable_types;
+    std::vector<std::string> variable_names;
+
+    StructBuilder(NodeBuilder &other) :
+        NodeBuilder(other, Mode::TOP_DOWN)
+    {
+        register_callback("name", std::bind(&StructBuilder::p_name, this, _1));
+        register_callback("structentries", std::bind(&StructBuilder::p_structentries, this, _1));
+    }
+
+    void p_name(int n) {
+        SearchNode node{n, pg};
+        name = node.text();
+    }
+    
+    void p_structentries(int n) {
+        ArgsBuilder builder(*this);
+
+        SearchNode node{n, pg};
+        node.visit(builder);
+        variable_types = builder.types;
+        variable_names = builder.names;
+    }
+
+    void create() {
+        print("Building Struct ", name, " with N types: ", variable_names.size());
+        if (variable_types.empty()) {
+            std::ostringstream oss;
+            oss << "Struct Definition has no types defined for type: " << name;
+            throw std::runtime_error(oss.str());
+        }
+        bool is_packed = false;
+        auto struct_type = llvm::StructType::create(variable_types, name, is_packed);
+        context->add_type(name, struct_type);
+    }    
+};
+
+
 struct BlockBuilder : NodeBuilder {
   std::unique_ptr<Context> u_context;
 
@@ -340,6 +441,7 @@ struct BlockBuilder : NodeBuilder {
     register_callback("line", std::bind(&BlockBuilder::p_line, this, _1));
     register_callback("branch", std::bind(&BlockBuilder::p_branch, this, _1));
     register_callback("functiondef", std::bind(&BlockBuilder::p_function, this, _1));
+    register_callback("structdef", std::bind(&BlockBuilder::p_structdef, this, _1));
   }
 
   void p_line(int n) {
@@ -349,6 +451,14 @@ struct BlockBuilder : NodeBuilder {
   }
 
   void p_function(int n);
+
+    void p_structdef(int n) {
+        SearchNode struct_node{n, pg};
+        StructBuilder struct_builder(*this);
+        
+        struct_node.visit(struct_builder);
+        struct_builder.create();
+    }
 
   void p_branch(int n) {
     SearchNode node{n, pg};
@@ -421,67 +531,7 @@ struct BlockBuilder : NodeBuilder {
   }
 };
 
-struct TypeBuilder : NodeBuilder {
-  TypeBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::BOTTOM_UP) {
-   register_callback("basetypename", std::bind(&TypeBuilder::p_basetypename, this, _1));
-    register_callback("ptrof", std::bind(&TypeBuilder::p_ptrof, this, _1));
-  }
 
-  void p_basetypename(int n) {
-    SearchNode node{n, pg};
-    auto type_name = node.text();
-    
-    if (type_name == "i64")
-      value_vector[n] = llvm::Type::getInt64Ty(C);
-    else if (type_name == "i32")
-      value_vector[n] = llvm::Type::getInt32Ty(C);
-    else if (type_name == "i16")
-      value_vector[n] = llvm::Type::getInt16Ty(C);
-    else if (type_name == "f64")
-      value_vector[n] = llvm::Type::getDoubleTy(C);
-    else if (type_name == "f32")
-      value_vector[n] = llvm::Type::getFloatTy(C);
-    else
-      throw std::runtime_error("Type not implemented");
-  }
-  void p_ptrof(int n) {
-    SearchNode node{n, pg};
-    value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
-  }
-  
-  void run_default(int n) {
-    SearchNode node{n, pg};
-    value_vector[n] = value_vector[node.child().N];
-  }
-};
-
-
-struct ArgsBuilder : NodeBuilder {
-  std::vector<llvm::Type*> types;
-  std::vector<string> names;
-  
-  ArgsBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::TOP_DOWN) {
-    register_callback("vardef", std::bind(&ArgsBuilder::p_vardef, this, _1));
-  }
-
-  void p_vardef(int n) {
-    SearchNode node{n, pg};
-    
-    auto type_node = node.child("type");
-    TypeBuilder builder(*this);
-    type_node.visit(builder);
-    
-    auto name = node.child("name").text();
-    auto type = llvm_type(type_node.N);
-
-    names.emplace_back(name);
-    types.emplace_back(type);
-  }
-
-  int size() {
-    return names.size();
-  }
-};
 
 struct FunctionBuilder : NodeBuilder {
   std::unique_ptr<llvm::Function> u_function;
@@ -550,30 +600,6 @@ struct FunctionBuilder : NodeBuilder {
   }
 };
 
-struct StructDefBuilder : NodeBuilder {
-  void f() {
-    /*StructDefinition struct_def;
-
-    int name_n = pg.children(n)[0];
-    int struct_n = pg.children(n)[1];
-    struct_def.name = pg.text(name_n);
-    auto process_entries = [this, &struct_def] (ParseGraph &pg, int n) -> bool {
-      if (pg.type(n) == "vardef") {
-        auto type_n = pg.children(n)[0];
-        auto name_n = pg.children(n)[1];
-        pg.visit_bottom_up(type_n, bind(&ModuleBuilder::process_type, this, _1, _2));
-        string name = pg.text(name_n);
-        struct_def.add_type(name, get<llvm::Type*>(value_vector[type_n]));
-        // context.add_type(name, get<llvm::Type*>(value_vector[type_n]));
-        return false;
-      }
-      return true;
-    };
-    pg.visit_bottom_up(struct_n, process_entries);
-    struct_def.build_type();
-  }*/
-  }    
-};
 
 struct ModuleBuilder : NodeBuilder {
   std::unique_ptr<llvm::Module> u_module;
@@ -592,9 +618,6 @@ struct ModuleBuilder : NodeBuilder {
     register_callback("module", bind(&ModuleBuilder::p_mainfunction, this, _1));
     u_context.reset(new Context());
     context = u_context.get();
-  }
-
-  void p_structdef(int n) {
   }
   
   void p_mainfunction(int n) {

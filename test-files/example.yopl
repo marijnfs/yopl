@@ -17,6 +17,10 @@ in1 f64 -> absolute -> out f64
   ret 0
 ]
 
+[Dude]
+x f64
+y f64
+hp i64
 
 in1 f64, in2 f64 -> bla -> out f64
    out = in1 + in2

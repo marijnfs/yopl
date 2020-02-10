@@ -11,7 +11,9 @@ struct Context {
   std::map<string, llvm::Type*>  type_map;
     llvm::BasicBlock *break_block = nullptr;
     llvm::BasicBlock *continue_block = nullptr;
-    
+
+    std::map<string, std::map<string, int>> member_lookup;
+
   //std::map<string, StructDefinition*> struct_map;
 
   Context *parent = nullptr;
@@ -33,6 +35,14 @@ struct Context {
   void add_type(string name, llvm::Type *type) {
     type_map[name] = type;
   }
+
+    void add_struct(string name, llvm::Type *type, std::vector<std::string> variable_names) {
+        type_map[name] = type;
+        std::map<string, int> lookup_map;
+        for (int n(0); n < variable_names.size(); ++n)
+            lookup_map[variable_names[n]] = n;
+        member_lookup[name] = lookup_map;
+    }
 
     llvm::BasicBlock *get_break() {
         if (break_block)
