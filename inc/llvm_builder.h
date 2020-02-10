@@ -269,8 +269,11 @@ struct ExpBuilder : NodeBuilder {
     SearchNode node{n, pg};
     auto funcname = node.child("funcname").text();
     auto function = context->get_value(funcname);
-    if (!function)
-        throw std::runtime_error("Function not defined");
+    if (!function) {
+        std::ostringstream oss;
+        oss << "Function not defined: " << funcname;
+        throw std::runtime_error(oss.str());
+    }
     auto funcarg = node.child("funcarg");
 
     std::vector<llvm::Value*> argument_values;
@@ -444,7 +447,6 @@ struct FunctionBuilder : NodeBuilder {
   }
 
   void p_function(int n) {
-
     //prepare nodes
     SearchNode node{n, pg};
     auto out = node.child("out");
@@ -452,7 +454,7 @@ struct FunctionBuilder : NodeBuilder {
 
     //get fuction name
     name = node.child("name").text();
-
+    print("Processing function: ", name);
     //create new context
     u_context.reset(new Context(context));
     context = u_context.get();

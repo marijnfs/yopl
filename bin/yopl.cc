@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
   cout << EE->getFunctionAddress("modulemain") << endl;
   typedef double MainFuncType();
   MainFuncType *fmain = (MainFuncType *)(EE->getFunctionAddress("modulemain"));
+  
   auto fmain2 = EE->FindFunctionNamed("modulemain");
   cout << "calling conv: " <<  fmain2->getCallingConv() << endl;
   std::vector<llvm::GenericValue> arguments(1);
