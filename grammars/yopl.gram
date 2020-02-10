@@ -5,11 +5,11 @@ entryln ws entry optcom '\n'
 optcom comment | nocomment
 nocomment ''
 comment ws '#' comstr:'[^\n]*'
-entry structdef | functiondef | block | line | comment | branch | continue | empty:'' | call
+entry structdef | functiondef | block | line | comment | branch | empty:'' | call
 block '\[\n' entries '\]' optcom '\n'
 structdef '\[' name '\]\n' structentries
 line stat | ret | bloe
-bloe alloc | inc | dec | vardef
+bloe alloc | inc | dec | vardef | continue | break
 alloc varname '\[' value '\]'
 name '[_[:alpha:]][_[:alnum:]]*'
 type basetype | structtype | ptrof
@@ -74,4 +74,5 @@ sources source | sources rws source
 source '\(' exp '\)' | number | node | loadvar | str
 node name | '\(' flow '\)'
 str '\"' content:'[^\"]*' '\"' | "\'" content:"[^\']*" "\'"
-continue '>' | continue '>'
+continue '>>'
+break '\^\^'

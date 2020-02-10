@@ -10,9 +10,9 @@ a = b + 4 / 8
 
 in1 f64 -> absolute -> out f64
   in1 > 0 ?
-    ret 0.3 - in1
-  |
     ret in1
+  |
+    ret 0 - in1
   ]
   ret 0
 ]
@@ -29,5 +29,11 @@ in1 f64, in2 f64 -> bla -> out f64
 a = bla(a (a + a))
 a = a + 1
 a = absolute(a)
+
+a > 10 ?
+    a = a - 1
+    >>
+]
+
 ret a
 

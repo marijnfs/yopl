@@ -70,6 +70,10 @@ struct NodeBuilder : TypeCallback {
   llvm::Type* llvm_type(int n) {
     return std::get<llvm::Type*>(value_vector[n]);
   }
+
+    void set_builder(llvm::IRBuilder<> *builder_) {
+        builder = builder_;
+    }
 };
 
 
@@ -99,6 +103,9 @@ struct ExpBuilder : NodeBuilder {
     register_callback("and", std::bind(&ExpBuilder::p_and, this, _1));
     register_callback("or", std::bind(&ExpBuilder::p_or, this, _1));
     register_callback("call", std::bind(&ExpBuilder::p_call, this, _1));
+
+    register_callback("continue", std::bind(&ExpBuilder::p_continue, this, _1));
+    register_callback("break", std::bind(&ExpBuilder::p_break, this, _1));
   }
   
   void p_number(int n) {
@@ -286,6 +293,24 @@ struct ExpBuilder : NodeBuilder {
     value_vector[n] = builder->CreateCall(function, argument_values);
   }
 
+  void p_continue(int n) {
+      print("adding continue");
+      auto continue_block = context->get_continue();
+      if (!continue_block) {
+          throw std::runtime_error("No continue available at this point");
+      }
+      builder->CreateBr(continue_block);
+  }
+
+  void p_break(int n) {
+      print("adding break");
+      auto break_block = context->get_break();
+      if (!break_block) {
+          throw std::runtime_error("No break available at this point");
+      }
+      builder->CreateBr(break_block);
+  }
+
   void run_default(int n) {
     //propagate
     
@@ -332,38 +357,61 @@ struct BlockBuilder : NodeBuilder {
     auto body = node.child("body");
     
     //generate evaluation of condition
-    ExpBuilder exp_builder(*this);
-    condition.visit(exp_builder);
-    auto cond_val = llvm_value(condition.N);
+    auto condition_evaluation = llvm::BasicBlock::Create(C, "condition", current_func);
+    builder->CreateBr(condition_evaluation);
+    builder->SetInsertPoint(condition_evaluation);
     
+    ExpBuilder exp_builder(*this);
+    exp_builder.set_builder(builder);
+    condition.visit(exp_builder);
+
+    auto cond_val = llvm_value(condition.N);
+
+    /// create continued block, where excecution will continue after branch
     auto continued = llvm::BasicBlock::Create(C, "continued", current_func);
+    
+    /// create block for if condition is true
     auto if_block = llvm::BasicBlock::Create(C, "if", current_func);
     
+    /// grab the sub node
     auto branchblock_node = body.child("branchblock").child();
     
     if (branchblock_node.type() == "if") {
-      builder->CreateCondBr(cond_val, if_block, continued);
+      auto cond = builder->CreateCondBr(cond_val, if_block, continued);
       
       builder->SetInsertPoint(if_block);
       BlockBuilder block_builder(*this, builder);
+      block_builder.context->break_block = continued; //set break block to 'continued' block that runs after branch
+      block_builder.context->continue_block = condition_evaluation; //set continue block to if branch itself
+      
       branchblock_node.child().visit(block_builder);
       
+      ///Make sure there is a terminator. 
       if (builder->GetInsertBlock()->getTerminator() == nullptr)
         builder->CreateBr(continued);
       builder->SetInsertPoint(continued);
-      
     } else if (branchblock_node.type() == "ifelse") {
+        //create an else block
       auto else_block = llvm::BasicBlock::Create(C, "else", current_func);
+
+      /// Create the conditional
       builder->CreateCondBr(cond_val, if_block, else_block);
       
+      /// Build If Block
       builder->SetInsertPoint(if_block);
       BlockBuilder block_builder(*this, builder);
+      block_builder.context->break_block = continued; //set break block to 'continued' block that runs after branch
+      block_builder.context->continue_block = condition_evaluation; //set continue block 
+
       branchblock_node.child(0).visit(block_builder);
       if (builder->GetInsertBlock()->getTerminator() == nullptr)
         builder->CreateBr(continued);
-      
+
+      // Build Else Block
       builder->SetInsertPoint(else_block);
       BlockBuilder else_block_builder(*this, builder);
+      block_builder.context->break_block = continued; //set break block to 'continued' block that runs after branch
+      block_builder.context->continue_block = condition_evaluation; //set continue block
       branchblock_node.child(1).visit(else_block_builder);
       if (builder->GetInsertBlock()->getTerminator() == nullptr)
         builder->CreateBr(continued);
