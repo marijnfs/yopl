@@ -91,7 +91,7 @@ struct ExpBuilder : NodeBuilder {
     register_callback("loadvarptr", std::bind(&ExpBuilder::p_loadvarptr, this, _1));
     register_callback("loadvar", std::bind(&ExpBuilder::p_loadvar, this, _1));
     register_callback("getelement", std::bind(&ExpBuilder::p_getelement, this, _1));
-    register_callback("getelementptr", std::bind(&ExpBuilder::p_getelement, this, _1));
+    register_callback("getelementptr", std::bind(&ExpBuilder::p_getelementptr, this, _1));
     register_callback("stat", std::bind(&ExpBuilder::p_statement, this, _1));
     register_callback("ret", std::bind(&ExpBuilder::p_return, this, _1));
     register_callback("inc", std::bind(&ExpBuilder::p_inc, this, _1));
