@@ -8,8 +8,8 @@ comment ws '#' comstr:'[^\n]*'
 entry structdef | functiondef | block | line | comment | branch | empty:'' | call
 block '\[\n' entries '\]' optcom '\n'
 structdef '\[' name '\]\n' structentries
-line stat | ret | bloe
-bloe alloc | inc | dec | vardef | continue | break
+line stat | ret | singlestat
+singlestat alloc | inc | dec | vardef | continue | break | exp
 alloc varname '\[' value '\]'
 name '[_[:alpha:]][_[:alnum:]]*'
 type basetype | structtype | ptrof
@@ -29,7 +29,7 @@ structentry vardef '\n'
 functiondef in:items rws '->' rws name rws '->' rws out:items '\n' body:entries ']'
 items item | item ',' rws items
 item name | vardef
-varname indexname '\.' varname | indexname
+varname name
 indexname name | int | '\(' value '\)'
 stat loadvarptrcreate rws '=' rws value
 value exp | number | arraysize
@@ -38,7 +38,11 @@ number int | float
 int '[[:digit:]]+'
 float  real:'[[:digit:]]+' '\.' frac:'[[:digit:]]+'
 arraysize varname '\[\]'
-exp number | binop | expb | inc | dec | loadvar | call
+exp number | binop | expb | inc | dec | loadvar | call | getelement
+getelement getelementptr
+getelementptr loadvarptr '\.' elements
+elements element | element '\.' elements
+element int | name
 call funcname:name '\(' funcarg:values '\)'
 inc '\+\+' loadvarptr
 dec '\-\-' loadvarptr
