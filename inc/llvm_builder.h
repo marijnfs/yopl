@@ -77,6 +77,54 @@ struct NodeBuilder : TypeCallback {
 };
 
 
+struct TypeBuilder : NodeBuilder {
+  TypeBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::BOTTOM_UP) {
+   register_callback("basetypename", std::bind(&TypeBuilder::p_basetypename, this, _1));
+    register_callback("ptrof", std::bind(&TypeBuilder::p_ptrof, this, _1));
+    register_callback("structtype", std::bind(&TypeBuilder::p_structtype, this, _1));
+  }
+
+  void p_basetypename(int n) {
+    SearchNode node{n, pg};
+    auto type_name = node.text();
+    
+    if (type_name == "i64")
+      value_vector[n] = llvm::Type::getInt64Ty(C);
+    else if (type_name == "i32")
+      value_vector[n] = llvm::Type::getInt32Ty(C);
+    else if (type_name == "i16")
+      value_vector[n] = llvm::Type::getInt16Ty(C);
+    else if (type_name == "f64")
+      value_vector[n] = llvm::Type::getDoubleTy(C);
+    else if (type_name == "f32")
+      value_vector[n] = llvm::Type::getFloatTy(C);
+    else
+      throw std::runtime_error("Type not implemented");
+  }
+
+  void p_ptrof(int n) {
+    SearchNode node{n, pg};
+    value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
+  }
+
+  void p_structtype(int n) {
+    SearchNode node{n, pg};
+    auto struct_name = node.text();
+    if (!context->type_map.count(struct_name)) {
+      std::ostringstream oss;
+      oss << "Couldn't find type: " << struct_name;
+      throw std::runtime_error(oss.str());
+    }
+    value_vector[n] = context->type_map[struct_name];
+  }
+  
+  void run_default(int n) {
+    SearchNode node{n, pg};
+    value_vector[n] = value_vector[node.child().N];
+  }
+};
+
+
 struct ExpBuilder : NodeBuilder {
   ExpBuilder(NodeBuilder &other) :
     NodeBuilder(other, Mode::BOTTOM_UP)
@@ -108,6 +156,8 @@ struct ExpBuilder : NodeBuilder {
 
     register_callback("continue", std::bind(&ExpBuilder::p_continue, this, _1));
     register_callback("break", std::bind(&ExpBuilder::p_break, this, _1));
+    register_callback("vardef", std::bind(&ExpBuilder::p_vardef, this, _1));
+
   }
   
   void p_number(int n) {
@@ -187,6 +237,28 @@ struct ExpBuilder : NodeBuilder {
     void p_getelement(int n);
 
     void p_getelementptr(int n);
+
+  void p_vardef(int n) {
+    SearchNode node{n, pg};
+
+    //get type
+    auto type_node = node.child("type");
+    TypeBuilder type_builder(*this);
+    type_node.visit(type_builder);
+    auto type = llvm_type(type_node.N);
+    if (!type) {
+      std::ostringstream oss;
+      oss << "Failed to create type: " << type_node.text();
+      throw std::runtime_error(oss.str());
+    }
+
+    auto name_node = node.child("name");
+    auto var_name = name_node.text();
+    auto value_ptr = builder->CreateAlloca(type, nullptr, var_name);
+    value_vector[n] = value_ptr;
+    
+    context->add_value(var_name, value_ptr);
+  }
   
   void p_statement(int n) {
     SearchNode node{n, pg};
@@ -329,39 +401,6 @@ struct ExpBuilder : NodeBuilder {
   }
 };
 
-struct TypeBuilder : NodeBuilder {
-  TypeBuilder(NodeBuilder &other) : NodeBuilder(other, Mode::BOTTOM_UP) {
-   register_callback("basetypename", std::bind(&TypeBuilder::p_basetypename, this, _1));
-    register_callback("ptrof", std::bind(&TypeBuilder::p_ptrof, this, _1));
-  }
-
-  void p_basetypename(int n) {
-    SearchNode node{n, pg};
-    auto type_name = node.text();
-    
-    if (type_name == "i64")
-      value_vector[n] = llvm::Type::getInt64Ty(C);
-    else if (type_name == "i32")
-      value_vector[n] = llvm::Type::getInt32Ty(C);
-    else if (type_name == "i16")
-      value_vector[n] = llvm::Type::getInt16Ty(C);
-    else if (type_name == "f64")
-      value_vector[n] = llvm::Type::getDoubleTy(C);
-    else if (type_name == "f32")
-      value_vector[n] = llvm::Type::getFloatTy(C);
-    else
-      throw std::runtime_error("Type not implemented");
-  }
-  void p_ptrof(int n) {
-    SearchNode node{n, pg};
-    value_vector[n] = llvm::PointerType::get(llvm_type(node.child().N), 0);
-  }
-  
-  void run_default(int n) {
-    SearchNode node{n, pg};
-    value_vector[n] = value_vector[node.child().N];
-  }
-};
 
 struct ArgsBuilder : NodeBuilder {
   std::vector<llvm::Type*> types;
@@ -375,8 +414,8 @@ struct ArgsBuilder : NodeBuilder {
     SearchNode node{n, pg};
     
     auto type_node = node.child("type");
-    TypeBuilder builder(*this);
-    type_node.visit(builder);
+    TypeBuilder type_builder(*this);
+    type_node.visit(type_builder);
     
     auto name = node.child("name").text();
     auto type = llvm_type(type_node.N);

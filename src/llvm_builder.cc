@@ -20,7 +20,6 @@ void ExpBuilder::p_getelement(int n) {
     builder->CreateLoad(value_ptr, false);
 }
 
-
 void ExpBuilder::p_getelementptr(int n) {
     SearchNode node{n, pg};
     auto load_ptr = node.child(0);

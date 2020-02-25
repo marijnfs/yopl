@@ -27,8 +27,8 @@ in1 f64, in2 f64 -> bla -> out f64
    ret out
 ]
 
-
-
+d Dude
+a = d.x
 
 a = bla(a (a + a))
 a = a + 1
