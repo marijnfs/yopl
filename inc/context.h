@@ -3,7 +3,9 @@
 #include <map>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include "print.h"
+
 using std::string;
 
 struct Context {
@@ -44,6 +46,20 @@ struct Context {
         member_lookup[name] = lookup_map;
     }
 
+  int get_struct_member_index(string structname, string membername) {
+    if (member_lookup.count(structname) == 0) {
+      std::ostringstream oss;
+      oss << "No such struct " << structname;
+      throw std::runtime_error(oss.str());
+    }
+    if (member_lookup[structname].count(membername) == 0) {
+      std::ostringstream oss;
+      oss << "struct " << structname << " does not have member " << membername;
+      throw std::runtime_error(oss.str());
+    }
+    return member_lookup[structname][membername];
+  }
+    
     llvm::BasicBlock *get_break() {
         if (break_block)
             return break_block;

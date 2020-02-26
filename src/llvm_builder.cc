@@ -32,13 +32,16 @@ void ExpBuilder::p_getelementptr(int n) {
         auto value_type = value_ptr->getType();
         auto child_node = n.child();
         if (child_node.type() == "name") {
-            if (value_type->isStructTy()) {
+            if (value_type->isPointerTy()) {
                 auto name = value_type->getStructName();
                 auto variable_index = llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), 0);
                 value_ptr = builder->CreateGEP(value_ptr, std::vector<llvm::Value*>{variable_index});
                 
             } else {
-                throw std::runtime_error("can't find variable, base type is not a struct");
+              ostringstream oss;
+              print(value_type->isPointerTy());
+              oss << "can't resolve member " << load_element.text() << ", base type " << load_ptr.text() << " is not a struct";
+              throw std::runtime_error(oss.str());
             }
         }
         if (child_node.type() == "number") {

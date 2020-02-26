@@ -429,6 +429,27 @@ struct ArgsBuilder : NodeBuilder {
   }
 };
 
+struct IndexLookupBuilder : NodeBuilder {
+    IndexLookupBuilder(NodeBuilder &other) :
+        NodeBuilder(other, Mode::TOP_DOWN)
+  {
+    register_callback("element", std::bind(&StructBuilder::p_element, this, _1));
+    register_callback("loadvarptr", std::bind(&StructBuilder::p_loadvarptr, this, _1));
+  }
+
+  void p_element(int n) {
+    SearchNode node{n, pg};
+    
+  }
+
+  void p_loadvarptr(int n) {
+    SearchNode node{n, pg};
+    
+  }
+
+  llvm::Value *value = nullptr;
+};
+
 struct StructBuilder : NodeBuilder {
     std::string name;
     std::vector<llvm::Type*> variable_types;
