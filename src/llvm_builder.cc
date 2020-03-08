@@ -17,7 +17,7 @@ void ExpBuilder::p_getelement(int n) {
 
     if (!value_ptr)
     	throw std::runtime_error("Failed to get llvm value");
-    builder->CreateLoad(value_ptr, false);
+    value_vector[n] = builder->CreateLoad(value_ptr, false);
 }
 
 void ExpBuilder::p_getelementptr(int n) {
