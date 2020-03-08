@@ -11,6 +11,7 @@ using std::string;
 struct Context {
   std::map<string, llvm::Value*> value_map;
   std::map<string, llvm::Type*>  type_map;
+  std::map<string, string>  value_structname_map;
     llvm::BasicBlock *break_block = nullptr;
     llvm::BasicBlock *continue_block = nullptr;
 
@@ -34,17 +35,23 @@ struct Context {
     value_map[name] = value;
   }
 
+  void add_typed_value(string struct_name, string name, llvm::Value *value) {
+    value_structname_map[name] = struct_name;
+    value_map[name] = value;    
+  }
+
   void add_type(string name, llvm::Type *type) {
     type_map[name] = type;
   }
 
-    void add_struct(string name, llvm::Type *type, std::vector<std::string> variable_names) {
-        type_map[name] = type;
-        std::map<string, int> lookup_map;
-        for (int n(0); n < variable_names.size(); ++n)
-            lookup_map[variable_names[n]] = n;
-        member_lookup[name] = lookup_map;
-    }
+  void add_struct(string name, llvm::Type *type, std::vector<std::string> variable_names) {
+    std::cout << "adding struct " << name << std::endl;
+      type_map[name] = type;
+      std::map<string, int> lookup_map;
+      for (int n(0); n < variable_names.size(); ++n)
+          lookup_map[variable_names[n]] = n;
+      member_lookup[name] = lookup_map;
+  }
 
   int get_struct_member_index(string structname, string membername) {
     if (member_lookup.count(structname) == 0) {
@@ -60,6 +67,15 @@ struct Context {
     return member_lookup[structname][membername];
   }
     
+
+    string get_struct_name(string varname) {
+        if (value_structname_map.count(varname))
+            return value_structname_map[varname];
+        std::ostringstream oss;
+        oss << "variable is not a struct: " << varname;
+        throw std::runtime_error(oss.str());
+    }
+
     llvm::BasicBlock *get_break() {
         if (break_block)
             return break_block;

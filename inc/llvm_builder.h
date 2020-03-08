@@ -264,9 +264,16 @@ struct ExpBuilder : NodeBuilder {
     SearchNode node{n, pg};
     int c0 = node.child(0).N;
     int c1 = node.child(1).N;
-    auto target_ptr = llvm_value(c0);
+    auto var_name = node.child(0).text();
+    auto target_value_ptr = context->get_value(var_name);
     auto value = llvm_value(c1);
-    value_vector[n] = builder->CreateStore(value, target_ptr);
+
+    if (!target_value_ptr) {
+      target_value_ptr = builder->CreateAlloca(value->getType(), nullptr, var_name);
+      context->add_value(var_name, target_value_ptr);
+    }
+    value_vector[n] = target_value_ptr;
+    value_vector[n] = builder->CreateStore(value, target_value_ptr);
   }
   
   void p_return(int n) {
@@ -429,26 +436,6 @@ struct ArgsBuilder : NodeBuilder {
   }
 };
 
-struct IndexLookupBuilder : NodeBuilder {
-    IndexLookupBuilder(NodeBuilder &other) :
-        NodeBuilder(other, Mode::TOP_DOWN)
-  {
-    register_callback("element", std::bind(&StructBuilder::p_element, this, _1));
-    register_callback("loadvarptr", std::bind(&StructBuilder::p_loadvarptr, this, _1));
-  }
-
-  void p_element(int n) {
-    SearchNode node{n, pg};
-    
-  }
-
-  void p_loadvarptr(int n) {
-    SearchNode node{n, pg};
-    
-  }
-
-  llvm::Value *value = nullptr;
-};
 
 struct StructBuilder : NodeBuilder {
     std::string name;
@@ -485,7 +472,8 @@ struct StructBuilder : NodeBuilder {
         }
         bool is_packed = false;
         auto struct_type = llvm::StructType::create(variable_types, name, is_packed);
-        context->add_type(name, struct_type);
+
+        context->add_struct(name, struct_type, variable_names);
     }    
 };
 
@@ -583,7 +571,7 @@ struct BlockBuilder : NodeBuilder {
       if (builder->GetInsertBlock()->getTerminator() == nullptr)
         builder->CreateBr(continued);
 
-      // Build Else Block
+      ///Build Else Block
       builder->SetInsertPoint(else_block);
       BlockBuilder else_block_builder(*this, builder);
       block_builder.context->break_block = continued; //set break block to 'continued' block that runs after branch
@@ -698,16 +686,16 @@ struct ModuleBuilder : NodeBuilder {
     current_func =
       llvm::Function::Create(FT, llvm::Function::ExternalLinkage, "modulemain", module);
     current_func->setCallingConv(llvm::CallingConv::C);
-    //u_function.reset(current_func);
+    // u_function.reset(current_func);
 
-    //Create the function block and traverse the parsetree
+    // Create the function block and traverse the parsetree
     auto block = llvm::BasicBlock::Create(C, "entry", current_func);
     llvm::IRBuilder<> block_ir_builder(block);
 
     BlockBuilder block_builder(*this, &block_ir_builder);
     module_node.visit(block_builder);
     
-    //print created main func
+    // Print created main func
     if (verifyFunction(*current_func, &llvm::outs())) {
       print("Function failed verification: ");
       return;

@@ -31,7 +31,7 @@ items item | item ',' rws items
 item name | vardef
 varname name
 indexname name | int | '\(' value '\)'
-stat loadvarptrcreate rws '=' rws value
+stat varname rws '=' rws value
 value exp | number | arraysize
 values value | values rws value
 number int | float
@@ -42,7 +42,8 @@ exp number | binop | expb | inc | dec | loadvar | call | getelement
 getelement getelementptr
 getelementptr loadvarptr '\.' elements
 elements element | element '\.' elements
-element int | name
+element int | name | ptr
+ptr '\*'
 call funcname:name '\(' funcarg:values '\)'
 inc '\+\+' loadvarptr
 dec '\-\-' loadvarptr

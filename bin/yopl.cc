@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
   auto fmain2 = EE->FindFunctionNamed("modulemain");
   cout << "calling conv: " <<  fmain2->getCallingConv() << endl;
   std::vector<llvm::GenericValue> arguments(1);
-  arguments[0].IntVal = llvm::APInt(32,2);
+  arguments[0].IntVal = llvm::APInt(32, 2);
   {
       auto result = EE->runFunction(fmain2, arguments);
       print("Result of main(2) ", result.DoubleVal);
