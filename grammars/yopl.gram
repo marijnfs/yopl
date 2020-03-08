@@ -42,7 +42,7 @@ exp number | binop | expb | inc | dec | loadvar | call | getelement
 getelement getelementptr
 getelementptr loadvarptr '\.' elements
 elements element | element '\.' elements
-element int | name | ptr
+element index:int | member:name | ptr
 ptr '\*'
 call funcname:name '\(' funcarg:values '\)'
 inc '\+\+' loadvarptr
